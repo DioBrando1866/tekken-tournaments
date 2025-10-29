@@ -12,7 +12,9 @@ import {
   View,
 } from "react-native";
 import API from "./api";
+import ProfileScreen from "./ProfileScreen";
 import TournamentModule from "./TournamentModule";
+
 
 
 export default function App() {
@@ -45,10 +47,17 @@ export default function App() {
       if (!username.trim() || !password.trim()) {
         return Alert.alert("Campos vacíos", "Rellena usuario y contraseña.");
       }
-
+    
       try {
         const res = await API.post("/auth/login", { username, password });
+        
+        // 🔹 Guardar token y usuario completo
         await AsyncStorage.setItem("token", res.data.token);
+        await AsyncStorage.setItem(
+          "user",
+          JSON.stringify({ ...res.data.user, password })
+        );
+    
         setUser(res.data.user);
         setScreen("hub");
       } catch (err) {
@@ -59,6 +68,7 @@ export default function App() {
         );
       }
     }
+    
 
     return (
       <SafeAreaView style={styles.container}>
@@ -98,10 +108,17 @@ export default function App() {
       if (!username.trim() || !password.trim()) {
         return Alert.alert("Campos vacíos", "Rellena usuario y contraseña.");
       }
-
+    
       try {
         const res = await API.post("/auth/register", { username, password });
+    
+        // 🔹 Guardar token y usuario completo
         await AsyncStorage.setItem("token", res.data.token);
+        await AsyncStorage.setItem(
+          "user",
+          JSON.stringify({ ...res.data.user, password })
+        );
+    
         setUser(res.data.user);
         setScreen("hub");
       } catch (err) {
@@ -112,6 +129,7 @@ export default function App() {
         );
       }
     }
+    
 
     return (
       <SafeAreaView style={styles.container}>
@@ -161,6 +179,9 @@ export default function App() {
         mode="view"
       />
     );
+    if (screen === "profile")
+      return <ProfileScreen goBack={() => setScreen("hub")} />;
+    
   
   
 
@@ -179,6 +200,11 @@ export default function App() {
         <TouchableOpacity style={styles.button} onPress={() => setScreen("view")}>
         <Text style={styles.buttonText}>Ver Torneos</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.button} onPress={() => setScreen("profile")}>
+        <Text style={styles.buttonText}>Ver/Editar Perfil</Text>
+        </TouchableOpacity>
+
 
 
         <TouchableOpacity
