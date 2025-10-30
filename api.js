@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://10.112.4.208:5000/api",
+  baseURL: "http://localhost:5000/api",
 });
 
 export const getTournaments = () => API.get("/tournaments");

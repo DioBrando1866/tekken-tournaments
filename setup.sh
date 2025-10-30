@@ -1,83 +1,53 @@
 #!/bin/bash
+echo "🚀 Iniciando configuración automática para Tekken Tournament..."
 
-echo "======================================"
-echo "  🥋 Tekken Tournaments Setup - Ubuntu"
-echo "======================================"
+# --- Detectar sistema operativo ---
+OS=$(uname)
+if [[ "$OS" == "Linux" ]]; then
+  LOCAL_IP=$(hostname -I | awk '{print $1}')
+elif [[ "$OS" == "Darwin" ]]; then
+  LOCAL_IP=$(ipconfig getifaddr en0)
+else
+  echo "⚠️ Sistema operativo no compatible. Usa Ubuntu o macOS."
+  exit 1
+fi
 
-# --- 1. Detectar IP local ---
-LOCAL_IP=$(hostname -I | awk '{print $1}')
 echo "🌐 IP local detectada: $LOCAL_IP"
 
-# --- 2. Verificar dependencias ---
-echo "🔍 Verificando dependencias..."
-if ! command -v node &> /dev/null
+# --- Comprobar que existe node y npm ---
+if ! command -v node &> /dev/null || ! command -v npm &> /dev/null
 then
-    echo "⚠️ Node.js no está instalado. Instalando..."
-    sudo apt update && sudo apt install -y nodejs npm
-else
-    echo "✅ Node.js encontrado: $(node -v)"
+  echo "❌ Node.js o npm no están instalados. Instálalos antes de continuar."
+  exit 1
 fi
 
-if ! command -v mongod &> /dev/null
-then
-    echo "⚠️ MongoDB no está instalado. Instalando..."
-    sudo apt install -y mongodb
-    sudo systemctl enable mongodb
-    sudo systemctl start mongodb
-else
-    echo "✅ MongoDB encontrado."
-fi
-
-if ! command -v expo &> /dev/null
-then
-    echo "⚠️ Expo CLI no encontrado. Instalando..."
-    sudo npm install -g expo-cli
-else
-    echo "✅ Expo CLI encontrado."
-fi
-
-# --- 3. Configurar MongoDB ---
-echo "🧩 Iniciando MongoDB..."
-sudo systemctl start mongodb
-sleep 2
-
-# --- 4. Configurar servidor Node ---
-echo "🚀 Configurando servidor Node..."
-cd server || exit
+# --- Instalar dependencias ---
+echo "📦 Instalando dependencias..."
 npm install
 
-# Crear archivo server.env si no existe
-if [ ! -f "server.env" ]; then
-    echo "📄 Creando archivo server.env..."
-    cat <<EOF > server.env
-MONGO_URI=mongodb://localhost:27017/tekken
-PORT=5000
-EOF
+# --- Reemplazar IP en los archivos ---
+echo "🔧 Actualizando IP en archivos del proyecto..."
+TARGET_DIR="$(pwd)"
+
+# Busca y reemplaza en los archivos donde haya http://<algo>:5000/
+find "$TARGET_DIR" -type f \( -name "*.js" -o -name "*.jsx" -o -name "*.ts" -o -name "*.tsx" \) -exec sed -i "s|http://[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}:5000|http://$LOCAL_IP:5000|g" {} +
+
+echo "✅ IP actualizada correctamente en los archivos."
+
+# --- Iniciar MongoDB ---
+if ! pgrep mongod > /dev/null
+then
+  echo "🧩 Iniciando MongoDB..."
+  sudo systemctl start mongod || mongod --dbpath ~/data/db --fork --logpath ~/data/mongod.log
+else
+  echo "✅ MongoDB ya está en ejecución."
 fi
 
-# --- 5. Lanzar servidor Node ---
-echo "🌐 Iniciando servidor Node..."
-gnome-terminal -- bash -c "node server.js; exec bash"
+# --- Iniciar servidor Node ---
+echo "🖥️ Iniciando servidor backend..."
+cd server && npm install && node server.js &
+cd ..
 
-# --- 6. Configurar app Expo ---
-cd ../app || exit
-npm install
-
-# --- 7. Actualizar IP del backend en la app ---
-echo "🛠️ Actualizando IP del backend en la app..."
-
-# Buscar archivos donde se usa la IP antigua y reemplazarla
-find . -type f -name "*.js" -exec sed -i "s|http://[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+:5000|http://$LOCAL_IP:5000|g" {} \;
-
-echo "✅ IP del backend actualizada a: http://$LOCAL_IP:5000"
-
-# --- 8. Lanzar app Expo ---
-echo "⚡ Iniciando Expo..."
-gnome-terminal -- bash -c "expo start; exec bash"
-
-echo ""
-echo "✅ Todo listo. MongoDB, Node y Expo están ejecutándose."
-echo "--------------------------------------"
-echo "👉 Servidor Node: http://$LOCAL_IP:5000"
-echo "👉 App Expo: escanea el QR con tu móvil (en la misma red WiFi)"
-echo "--------------------------------------"
+# --- Iniciar Expo ---
+echo "📱 Iniciando app Expo..."
+npx expo start --web

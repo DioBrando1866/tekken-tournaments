@@ -1,29 +1,38 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+
+const profileImages = {
+  "random.png": require("./assets/images/profile-pics/random.png"),
+  "Thumbnail-Jin.webp": require("./assets/images/profile-pics/Thumbnail-Jin.webp"),
+  "Thumbnail-Jack-8.webp": require("./assets/images/profile-pics/Thumbnail-Jack-8.webp"),
+  "Thumbnail-King.webp": require("./assets/images/profile-pics/Thumbnail-King.webp"),
+};
 
 export default function ProfileScreen({ goBack }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [selectingImage, setSelectingImage] = useState(false);
   const [tempUser, setTempUser] = useState({});
   const [passwords, setPasswords] = useState({
     currentPassword: "",
     newPassword: "",
   });
   const [message, setMessage] = useState("");
-const [messageColor, setMessageColor] = useState("#fff");
-
+  const [messageColor, setMessageColor] = useState("#fff");
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -35,7 +44,7 @@ const [messageColor, setMessageColor] = useState("#fff");
           return;
         }
 
-        const res = await fetch("http://10.112.4.208:5000/api/users/profile", {
+        const res = await fetch("http://192.168.1.42:5000/api/users/profile", {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -58,7 +67,7 @@ const [messageColor, setMessageColor] = useState("#fff");
   async function handleSave() {
     try {
       const token = await AsyncStorage.getItem("token");
-      const res = await fetch("http://10.112.4.208:5000/api/users/profile", {
+      const res = await fetch("http://192.168.1.42:5000/api/users/profile", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -68,7 +77,7 @@ const [messageColor, setMessageColor] = useState("#fff");
       });
 
       const data = await res.json();
-      setUser(data);
+      setUser(data.user || data); // acepta ambos formatos, por si cambia el backend
       setEditing(false);
       Alert.alert("✅ Cambios guardados", "Nombre de usuario actualizado.");
     } catch (error) {
@@ -77,35 +86,35 @@ const [messageColor, setMessageColor] = useState("#fff");
   }
 
   // Cambiar contraseña
-async function handleChangePassword() {
+  async function handleChangePassword() {
     try {
       const token = await AsyncStorage.getItem("token");
-      const res = await fetch("http://10.112.4.208:5000/api/users/profile/password", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          currentPassword: passwords.currentPassword,
-          newPassword: passwords.newPassword,
-        }),
-      });
-  
+      const res = await fetch(
+        "http://192.168.1.42:5000/api/users/profile/password",
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            currentPassword: passwords.currentPassword,
+            newPassword: passwords.newPassword,
+          }),
+        }
+      );
+
       const data = await res.json();
-  
+
       if (!res.ok) {
-        // ❌ Contraseña incorrecta
         setMessageColor("#ff4d4d");
         setMessage(data.message || "❌ Error al cambiar la contraseña");
       } else {
-        // ✅ Cambio exitoso
         setMessageColor("#4CAF50");
         setMessage(data.message || "✅ Contraseña actualizada correctamente");
         setPasswords({ currentPassword: "", newPassword: "" });
       }
-  
-      // Ocultar mensaje tras unos segundos
+
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
       console.error("❌ Error cambiando contraseña:", err);
@@ -113,8 +122,32 @@ async function handleChangePassword() {
       setMessage("❌ Error al cambiar la contraseña");
     }
   }
-  
-  
+
+  // Cambiar imagen de perfil
+  async function handleSelectImage(imageName) {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await fetch("http://192.168.1.42:5000/api/users/profile", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ profileImage: imageName }),
+      });
+
+      if (!res.ok) throw new Error("Error al actualizar imagen");
+
+      const data = await res.json();
+      setUser(data.user); // 👈 accedemos al campo "user"
+      setSelectingImage(false);
+      setSelectingImage(false);
+    } catch (error) {
+      console.error("❌ Error actualizando imagen:", error);
+      Alert.alert("Error", "No se pudo cambiar la imagen de perfil.");
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -136,6 +169,48 @@ async function handleChangePassword() {
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Perfil del Usuario</Text>
 
+      {/* Imagen de perfil */}
+      <View style={{ alignItems: "center", marginBottom: 20 }}>
+        <Image
+          source={
+            profileImages[user.profileImage] || profileImages["random.png"]
+          }
+          style={styles.profileImage}
+        />
+
+        <TouchableOpacity
+          style={styles.changeImageButton}
+          onPress={() => setSelectingImage(true)}
+        >
+          <Text style={styles.buttonText}>🖼️ Cambiar imagen</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Selector de imágenes (Modal) */}
+      <Modal visible={selectingImage} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Elige tu imagen de perfil</Text>
+            <View style={styles.imageGrid}>
+              {Object.keys(profileImages).map((imgName) => (
+                <TouchableOpacity
+                  key={imgName}
+                  onPress={() => handleSelectImage(imgName)}
+                >
+                  <Image source={profileImages[imgName]} style={styles.optionImage} />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setSelectingImage(false)}
+            >
+              <Text style={styles.buttonText}>❌ Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Usuario */}
       <View style={styles.section}>
         <Text style={styles.label}>Nombre de usuario:</Text>
@@ -143,7 +218,9 @@ async function handleChangePassword() {
           <TextInput
             style={styles.input}
             value={tempUser.username}
-            onChangeText={(text) => setTempUser({ ...tempUser, username: text })}
+            onChangeText={(text) =>
+              setTempUser({ ...tempUser, username: text })
+            }
           />
         ) : (
           <Text style={styles.value}>{user.username}</Text>
@@ -223,11 +300,16 @@ async function handleChangePassword() {
           </View>
         )}
 
-        {/* 💬 Aquí va el mensaje */}
         {message ? (
-         <Text style={{ color: messageColor, textAlign: "center", marginVertical: 10 }}>
-        {message}
-        </Text>
+          <Text
+            style={{
+              color: messageColor,
+              textAlign: "center",
+              marginVertical: 10,
+            }}
+          >
+            {message}
+          </Text>
         ) : null}
 
         <TouchableOpacity style={styles.backButton} onPress={goBack}>
@@ -258,6 +340,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#333",
   },
+  profileImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 2,
+    borderColor: "#ffd700",
+  },
   buttons: { marginTop: 20 },
   editButton: {
     backgroundColor: "#e43b3b",
@@ -265,6 +354,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 10,
+  },
+  changeImageButton: {
+    backgroundColor: "#444",
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 10,
   },
   changePasswordButton: {
     backgroundColor: "#0066cc",
@@ -295,4 +390,37 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: "#fff", fontWeight: "700" },
   loading: { color: "#fff", textAlign: "center", marginTop: 20 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContainer: {
+    backgroundColor: "#1a1a1a",
+    borderRadius: 12,
+    padding: 20,
+    width: "85%",
+    alignItems: "center",
+  },
+  modalTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 15,
+  },
+  imageGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+  },
+  optionImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    margin: 5,
+    borderWidth: 2,
+    borderColor: "#ffd700",
+  },
 });
