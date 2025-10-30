@@ -1,4 +1,4 @@
-# 🥋 Tekken Tournaments — Guía Completa de Instalación y Ejecución
+# Tekken Tournaments — Guía Completa de Instalación y Ejecución
 
 Este proyecto consta de tres servicios principales:
 
@@ -8,7 +8,7 @@ Este proyecto consta de tres servicios principales:
 
 ---
 
-## 🚀 Requisitos Previos
+## Requisitos Previos
 
 Asegúrate de tener instalados los siguientes programas:
 
@@ -22,7 +22,7 @@ Asegúrate de tener instalados los siguientes programas:
 
 ---
 
-## 📂 Estructura del Proyecto
+## Estructura del Proyecto
 tekken-tournaments/
 │
 ├── app/ # Aplicación Expo (frontend móvil)
@@ -36,27 +36,6 @@ tekken-tournaments/
 │ └── server.env # Variables de entorno
 │
 └── README.md # Este archivo
-
-## Instalación Windows 10
-   ## Node JS
-   Link: https://nodejs.org/en/download/
-   node -v
-   npm -v
-
-## Instalar MongoDB en Windows
-
-Descarga desde https://www.mongodb.com/try/download/community
-Durante la instalación, marca la casilla “Install MongoDB as a Service”.
-(Opcional) Instala MongoDB Compass para una interfaz gráfica.
-MongoDB se ejecutará automáticamente en localhost:27017.
-
-## Instalar Expo CLI
-
-npm install -g expo-cli
-
-cd ../app
-npm install
-expo start
 
 ## Comandos Útiles
 Iniciar servidor Node.js node server.js
