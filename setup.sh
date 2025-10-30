@@ -4,7 +4,11 @@ echo "======================================"
 echo "  🥋 Tekken Tournaments Setup - Ubuntu"
 echo "======================================"
 
-# --- 1. Verificar dependencias ---
+# --- 1. Detectar IP local ---
+LOCAL_IP=$(hostname -I | awk '{print $1}')
+echo "🌐 IP local detectada: $LOCAL_IP"
+
+# --- 2. Verificar dependencias ---
 echo "🔍 Verificando dependencias..."
 if ! command -v node &> /dev/null
 then
@@ -32,18 +36,17 @@ else
     echo "✅ Expo CLI encontrado."
 fi
 
-# --- 2. Configurar MongoDB ---
+# --- 3. Configurar MongoDB ---
 echo "🧩 Iniciando MongoDB..."
 sudo systemctl start mongodb
 sleep 2
-sudo systemctl status mongodb --no-pager | head -n 5
 
-# --- 3. Configurar servidor Node ---
+# --- 4. Configurar servidor Node ---
 echo "🚀 Configurando servidor Node..."
 cd server || exit
 npm install
 
-# Crear archivo .env si no existe
+# Crear archivo server.env si no existe
 if [ ! -f "server.env" ]; then
     echo "📄 Creando archivo server.env..."
     cat <<EOF > server.env
@@ -52,22 +55,29 @@ PORT=5000
 EOF
 fi
 
-# --- 4. Lanzar servidor Node ---
+# --- 5. Lanzar servidor Node ---
 echo "🌐 Iniciando servidor Node..."
 gnome-terminal -- bash -c "node server.js; exec bash"
 
-# --- 5. Configurar app Expo ---
-echo "📱 Configurando app Expo..."
+# --- 6. Configurar app Expo ---
 cd ../app || exit
 npm install
 
-# --- 6. Lanzar app Expo ---
+# --- 7. Actualizar IP del backend en la app ---
+echo "🛠️ Actualizando IP del backend en la app..."
+
+# Buscar archivos donde se usa la IP antigua y reemplazarla
+find . -type f -name "*.js" -exec sed -i "s|http://[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+:5000|http://$LOCAL_IP:5000|g" {} \;
+
+echo "✅ IP del backend actualizada a: http://$LOCAL_IP:5000"
+
+# --- 8. Lanzar app Expo ---
 echo "⚡ Iniciando Expo..."
 gnome-terminal -- bash -c "expo start; exec bash"
 
 echo ""
 echo "✅ Todo listo. MongoDB, Node y Expo están ejecutándose."
 echo "--------------------------------------"
-echo "👉 Servidor: http://localhost:5000"
-echo "👉 App Expo: escanea el QR o abre en emulador"
+echo "👉 Servidor Node: http://$LOCAL_IP:5000"
+echo "👉 App Expo: escanea el QR con tu móvil (en la misma red WiFi)"
 echo "--------------------------------------"
