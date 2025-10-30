@@ -1,50 +1,66 @@
-# Welcome to your Expo app 👋
+# 🥋 Tekken Tournaments — Guía Completa de Instalación y Ejecución
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Este proyecto consta de tres servicios principales:
 
-## Get started
+1. **Servidor Node.js / Express** → Lógica de negocio y conexión a MongoDB.  
+2. **Base de datos MongoDB** → Almacenamiento de usuarios, torneos y contraseñas.  
+3. **Aplicación Expo (React Native)** → Interfaz móvil donde los jugadores gestionan su perfil, torneos, etc.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 🚀 Requisitos Previos
 
-2. Start the app
+Asegúrate de tener instalados los siguientes programas:
 
-   ```bash
-   npx expo start
-   ```
+| Herramienta | Versión recomendada | Requerido por |
+|--------------|--------------------|----------------|
+| [Node.js](https://nodejs.org/) | >= 18.x | Servidor + Expo |
+| [npm](https://www.npmjs.com/) | >= 9.x | Servidor + Expo |
+| [MongoDB Community Server](https://www.mongodb.com/try/download/community) | >= 6.0 | Base de datos |
+| [Git](https://git-scm.com/downloads) | — | Clonar el repositorio |
+| [Expo CLI](https://docs.expo.dev/get-started/installation/) | — | Aplicación móvil |
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 📂 Estructura del Proyecto
+tekken-tournaments/
+│
+├── app/ # Aplicación Expo (frontend móvil)
+│ ├── App.js
+│ ├── assets/ # Imágenes de perfil de Tekken
+│ 
+├── server/ # Backend Node.js / Express
+│ ├── routes/ # Rutas (user.js, tournaments.js, etc.)
+│ ├── models/ # Esquemas de MongoDB
+│ ├── server.js # Punto de entrada
+│ └── server.env # Variables de entorno
+│
+└── README.md # Este archivo
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Instalación Windows 10
+   ## Node JS
+   Link: https://nodejs.org/en/download/
+   node -v
+   npm -v
 
-## Get a fresh project
+## Instalar MongoDB en Windows
 
-When you're ready, run:
+Descarga desde https://www.mongodb.com/try/download/community
+Durante la instalación, marca la casilla “Install MongoDB as a Service”.
+(Opcional) Instala MongoDB Compass para una interfaz gráfica.
+MongoDB se ejecutará automáticamente en localhost:27017.
 
-```bash
-npm run reset-project
-```
+## Instalar Expo CLI
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+npm install -g expo-cli
 
-## Learn more
+cd ../app
+npm install
+expo start
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Comandos Útiles
+Iniciar servidor Node.js node server.js
+Iniciar aplicación Expo	expo start
+Ver logs de MongoDB (Ubuntu)	sudo journalctl -u mongodb
+Abrir consola Mongo	mongosh
+Limpiar dependencias	rm -rf node_modules && npm install
