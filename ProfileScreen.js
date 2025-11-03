@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "./apiSupabase";
 
 const profileImages = {
   "random.png": require("./assets/images/profile-pics/random.png"),
@@ -27,34 +27,38 @@ export default function ProfileScreen({ goBack }) {
   const [changingPassword, setChangingPassword] = useState(false);
   const [selectingImage, setSelectingImage] = useState(false);
   const [tempUser, setTempUser] = useState({});
-  const [passwords, setPasswords] = useState({
-    currentPassword: "",
-    newPassword: "",
-  });
+  const [passwords, setPasswords] = useState({ newPassword: "" });
   const [message, setMessage] = useState("");
   const [messageColor, setMessageColor] = useState("#fff");
 
+  // 🔹 Cargar perfil desde Supabase
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const token = await AsyncStorage.getItem("token");
-        if (!token) {
-          console.warn("⚠️ No hay token guardado");
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session) {
+          console.warn("⚠️ No hay sesión activa");
           setLoading(false);
           return;
         }
 
-        const res = await fetch("http://192.168.1.42:5000/api/users/profile", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const userId = session.user.id;
 
-        if (!res.ok) throw new Error("Error al obtener el perfil");
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", userId)
+          .single();
 
-        const data = await res.json();
+        if (error) throw error;
+
         setUser(data);
         setTempUser(data);
-      } catch (error) {
-        console.error("❌ Error cargando perfil:", error);
+      } catch (err) {
+        console.error("❌ Error cargando perfil:", err);
       } finally {
         setLoading(false);
       }
@@ -63,84 +67,58 @@ export default function ProfileScreen({ goBack }) {
     loadProfile();
   }, []);
 
-  // Guardar nuevo nombre
+  // 🔹 Guardar nuevo nombre
   async function handleSave() {
     try {
-      const token = await AsyncStorage.getItem("token");
-      const res = await fetch("http://192.168.1.42:5000/api/users/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ username: tempUser.username }),
-      });
+      const { error } = await supabase
+        .from("users")
+        .update({ username: tempUser.username })
+        .eq("id", user.id);
 
-      const data = await res.json();
-      setUser(data.user || data); // acepta ambos formatos, por si cambia el backend
+      if (error) throw error;
+
+      setUser({ ...user, username: tempUser.username });
       setEditing(false);
       Alert.alert("✅ Cambios guardados", "Nombre de usuario actualizado.");
     } catch (error) {
       console.error("❌ Error guardando cambios:", error);
+      Alert.alert("Error", "No se pudo actualizar el nombre.");
     }
   }
 
-  // Cambiar contraseña
+  // 🔹 Cambiar contraseña
   async function handleChangePassword() {
     try {
-      const token = await AsyncStorage.getItem("token");
-      const res = await fetch(
-        "http://192.168.1.42:5000/api/users/profile/password",
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            currentPassword: passwords.currentPassword,
-            newPassword: passwords.newPassword,
-          }),
-        }
-      );
+      const { error } = await supabase.auth.updateUser({
+        password: passwords.newPassword,
+      });
 
-      const data = await res.json();
+      if (error) throw error;
 
-      if (!res.ok) {
-        setMessageColor("#ff4d4d");
-        setMessage(data.message || "❌ Error al cambiar la contraseña");
-      } else {
-        setMessageColor("#4CAF50");
-        setMessage(data.message || "✅ Contraseña actualizada correctamente");
-        setPasswords({ currentPassword: "", newPassword: "" });
-      }
-
-      setTimeout(() => setMessage(""), 3000);
-    } catch (err) {
-      console.error("❌ Error cambiando contraseña:", err);
+      setMessageColor("#4CAF50");
+      setMessage("✅ Contraseña actualizada correctamente.");
+      setPasswords({ newPassword: "" });
+      setChangingPassword(false);
+    } catch (error) {
+      console.error("❌ Error cambiando contraseña:", error);
       setMessageColor("#ff4d4d");
-      setMessage("❌ Error al cambiar la contraseña");
+      setMessage("❌ Error al cambiar la contraseña.");
+    } finally {
+      setTimeout(() => setMessage(""), 3000);
     }
   }
 
-  // Cambiar imagen de perfil
+  // 🔹 Cambiar imagen de perfil
   async function handleSelectImage(imageName) {
     try {
-      const token = await AsyncStorage.getItem("token");
-      const res = await fetch("http://192.168.1.42:5000/api/users/profile", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ profileImage: imageName }),
-      });
+      const { error } = await supabase
+        .from("users")
+        .update({ profile_image: imageName })
+        .eq("id", user.id);
 
-      if (!res.ok) throw new Error("Error al actualizar imagen");
+      if (error) throw error;
 
-      const data = await res.json();
-      setUser(data.user); // 👈 accedemos al campo "user"
-      setSelectingImage(false);
+      setUser({ ...user, profile_image: imageName });
       setSelectingImage(false);
     } catch (error) {
       console.error("❌ Error actualizando imagen:", error);
@@ -173,7 +151,7 @@ export default function ProfileScreen({ goBack }) {
       <View style={{ alignItems: "center", marginBottom: 20 }}>
         <Image
           source={
-            profileImages[user.profileImage] || profileImages["random.png"]
+            profileImages[user.profile_image] || profileImages["random.png"]
           }
           style={styles.profileImage}
         />
@@ -186,7 +164,7 @@ export default function ProfileScreen({ goBack }) {
         </TouchableOpacity>
       </View>
 
-      {/* Selector de imágenes (Modal) */}
+      {/* Selector de imágenes */}
       <Modal visible={selectingImage} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -197,7 +175,10 @@ export default function ProfileScreen({ goBack }) {
                   key={imgName}
                   onPress={() => handleSelectImage(imgName)}
                 >
-                  <Image source={profileImages[imgName]} style={styles.optionImage} />
+                  <Image
+                    source={profileImages[imgName]}
+                    style={styles.optionImage}
+                  />
                 </TouchableOpacity>
               ))}
             </View>
@@ -264,16 +245,6 @@ export default function ProfileScreen({ goBack }) {
 
         {changingPassword && (
           <View style={styles.section}>
-            <Text style={styles.label}>Contraseña actual:</Text>
-            <TextInput
-              secureTextEntry
-              style={styles.input}
-              value={passwords.currentPassword}
-              onChangeText={(text) =>
-                setPasswords({ ...passwords, currentPassword: text })
-              }
-            />
-
             <Text style={styles.label}>Nueva contraseña:</Text>
             <TextInput
               secureTextEntry

@@ -1,333 +1,163 @@
-import axios from "axios";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
-  ScrollView,
+  SafeAreaView,
+  StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { supabase } from "./apiSupabase";
+import { AnimatedBackground } from "./App";
 
-const API_URL = "http://10.112.4.208:5000/api/tournaments"; // ⚙️ Cambia si tu IP cambia
-
-export default function TournamentModule({ goBack, mode = "view" }) {
+export default function TournamentModule({ goBack }) {
   const [tournaments, setTournaments] = useState([]);
-  const [selectedTournament, setSelectedTournament] = useState(null);
-  const [newTName, setNewTName] = useState("");
-  const [newPlayer, setNewPlayer] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // 🔹 Obtener torneos desde el backend
   async function fetchTournaments() {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await axios.get(API_URL);
-      setTournaments(res.data);
+      const { data, error } = await supabase
+        .from("tournaments")
+        .select("*")
+        .order("date", { ascending: true });
+
+      if (error) throw error;
+      setTournaments(data || []);
     } catch (err) {
-      console.error("Error obteniendo torneos:", err.message);
-      Alert.alert("Error al obtener torneos del servidor");
+      console.error("❌ Error obteniendo torneos:", err);
+      Alert.alert("Error", "No se pudieron cargar los torneos");
     } finally {
       setLoading(false);
     }
-  }
-
-  // 🔹 Crear nuevo torneo
-  async function createTournament() {
-    if (!newTName.trim()) {
-      Alert.alert("Debes escribir un nombre para el torneo");
-      return;
-    }
-    try {
-      const res = await axios.post(API_URL, {
-        name: newTName.trim(),
-        date: new Date().toISOString().split("T")[0],
-        location: "Madrid",
-      });
-      setTournaments((prev) => [res.data, ...prev]);
-      setSelectedTournament(res.data);
-      setNewTName("");
-    } catch (err) {
-      console.error("Error al crear torneo:", err.message);
-      Alert.alert("Error al crear torneo");
-    }
-  }
-
-  // 🔹 Actualizar torneo (jugadores o rounds)
-  async function updateTournament(id, patch) {
-    try {
-      const res = await axios.put(`${API_URL}/${id}`, patch);
-      setTournaments((prev) =>
-        prev.map((t) => (t._id === id ? res.data : t))
-      );
-      setSelectedTournament(res.data);
-    } catch (err) {
-      console.error("Error al actualizar torneo:", err.message);
-    }
-  }
-
-  // 🔹 Añadir jugador
-  function addPlayer() {
-    if (!newPlayer.trim()) {
-      Alert.alert("Introduce un nombre de jugador");
-      return;
-    }
-    const updatedPlayers = [
-      ...(selectedTournament.players || []),
-      { id: Date.now().toString(), name: newPlayer.trim() },
-    ];
-    updateTournament(selectedTournament._id, { players: updatedPlayers });
-    setNewPlayer("");
-  }
-
-  // 🔹 Generar enfrentamientos (bracket simple)
-  function generateBracket() {
-    const players = [...selectedTournament.players];
-    if (players.length < 2) {
-      Alert.alert("Se necesitan al menos 2 jugadores");
-      return;
-    }
-
-    const shuffled = players.sort(() => Math.random() - 0.5);
-    const round = [];
-
-    for (let i = 0; i < shuffled.length; i += 2) {
-      const p1 = shuffled[i];
-      const p2 = shuffled[i + 1];
-      if (p2)
-        round.push({
-          id: Date.now().toString() + i,
-          p1: p1.name,
-          p2: p2.name,
-          winnerId: null,
-        });
-    }
-
-    const updatedRounds = [round];
-    updateTournament(selectedTournament._id, { rounds: updatedRounds });
   }
 
   useEffect(() => {
     fetchTournaments();
   }, []);
 
-  // 🏆 Vista de detalle de un torneo
-  const renderTournamentDetail = () => (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: "#0b0b0b", padding: 16 }}
-      contentContainerStyle={{ paddingBottom: 40 }}
-    >
-      <Text
-        style={{
-          fontSize: 24,
-          fontWeight: "bold",
-          color: "#fff",
-          marginBottom: 10,
-        }}
-      >
-        {selectedTournament.name}
-      </Text>
+  async function deleteTournament(id) {
+    Alert.alert(
+      "Eliminar Torneo",
+      "¿Estás seguro de que quieres eliminar este torneo?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("tournaments")
+                .delete()
+                .eq("id", id);
 
-      <Text style={{ color: "#bbb", marginBottom: 5 }}>
-        📅 Fecha: {selectedTournament.date}
-      </Text>
-      <Text style={{ color: "#bbb", marginBottom: 20 }}>
-        📍 Lugar: {selectedTournament.location}
-      </Text>
+              if (error) throw error;
+              fetchTournaments(); // recarga
+            } catch (err) {
+              Alert.alert("Error", "No se pudo eliminar el torneo");
+            }
+          },
+        },
+      ]
+    );
+  }
 
-      {/* Jugadores */}
-      <Text style={{ color: "#fff", fontSize: 18, marginBottom: 5 }}>
-        Jugadores:
-      </Text>
-      {selectedTournament.players?.length > 0 ? (
-        selectedTournament.players.map((p) => (
-          <Text key={p.id} style={{ color: "#ccc", marginVertical: 2 }}>
-            • {p.name}
+  if (loading)
+    return (
+      <SafeAreaView style={[styles.container, styles.center]}>
+        <AnimatedBackground />
+        <ActivityIndicator size="large" color="#e43b3b" />
+        <Text style={{ color: "#fff", marginTop: 10 }}>Cargando torneos...</Text>
+      </SafeAreaView>
+    );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <AnimatedBackground />
+      <View style={{ flex: 1, padding: 16 }}>
+        <Text style={styles.bigTitle}>TORNEOS REGISTRADOS</Text>
+
+        {tournaments.length === 0 ? (
+          <Text style={{ color: "#aaa", textAlign: "center", marginTop: 20 }}>
+            No hay torneos registrados.
           </Text>
-        ))
-      ) : (
-        <Text style={{ color: "#555" }}>No hay jugadores aún.</Text>
-      )}
+        ) : (
+          <FlatList
+            data={tournaments}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <View style={styles.card}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  <Text style={styles.cardText}>📅 {item.date}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => deleteTournament(item.id)}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>🗑</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          />
+        )}
 
-      {/* Añadir jugador */}
-      <View
-        style={{
-          flexDirection: "row",
-          marginTop: 15,
-          marginBottom: 20,
-        }}
-      >
-        <TextInput
-          style={{
-            flex: 1,
-            backgroundColor: "#222",
-            color: "#fff",
-            borderRadius: 8,
-            padding: 8,
-          }}
-          placeholder="Nuevo jugador"
-          placeholderTextColor="#666"
-          value={newPlayer}
-          onChangeText={setNewPlayer}
-        />
-        <TouchableOpacity
-          onPress={addPlayer}
-          style={{
-            backgroundColor: "#e91e63",
-            marginLeft: 10,
-            borderRadius: 8,
-            justifyContent: "center",
-            paddingHorizontal: 12,
-          }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "bold" }}>Añadir</Text>
+        <TouchableOpacity onPress={goBack} style={styles.backButton}>
+          <Text style={styles.backText}>Volver</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Bracket */}
-      <Text style={{ color: "#fff", fontSize: 18, marginBottom: 10 }}>
-        Enfrentamientos:
-      </Text>
-      {selectedTournament.rounds?.length > 0 ? (
-        selectedTournament.rounds.map((round, ri) => (
-          <View
-            key={ri}
-            style={{
-              backgroundColor: "#111",
-              padding: 10,
-              borderRadius: 8,
-              marginBottom: 10,
-            }}
-          >
-            <Text
-              style={{
-                color: "#e91e63",
-                fontWeight: "bold",
-                marginBottom: 5,
-              }}
-            >
-              Ronda {ri + 1}
-            </Text>
-            {round.map((match) => (
-              <Text key={match.id} style={{ color: "#ccc" }}>
-                {match.p1} vs {match.p2}
-              </Text>
-            ))}
-          </View>
-        ))
-      ) : (
-        <Text style={{ color: "#555" }}>No se ha generado ningún bracket.</Text>
-      )}
-
-      <TouchableOpacity
-        onPress={generateBracket}
-        style={{
-          backgroundColor: "#2196f3",
-          padding: 12,
-          borderRadius: 8,
-          marginTop: 20,
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: "#fff", fontWeight: "bold" }}>
-          Generar Bracket
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => setSelectedTournament(null)}
-        style={{
-          marginTop: 20,
-          alignItems: "center",
-        }}
-      >
-        <Text style={{ color: "#aaa" }}>← Volver a la lista</Text>
-      </TouchableOpacity>
-    </ScrollView>
+    </SafeAreaView>
   );
-
-  // 🏁 Lista de torneos
-  const renderTournamentList = () => (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "#0b0b0b",
-        padding: 16,
-        paddingTop: 40,
-      }}
-    >
-      <Text
-        style={{
-          fontSize: 26,
-          color: "#fff",
-          fontWeight: "bold",
-          marginBottom: 15,
-        }}
-      >
-        Torneos
-      </Text>
-
-      {mode === "create" && (
-        <View style={{ flexDirection: "row", marginBottom: 20 }}>
-          <TextInput
-            style={{
-              flex: 1,
-              backgroundColor: "#222",
-              color: "#fff",
-              borderRadius: 8,
-              padding: 10,
-            }}
-            placeholder="Nombre del nuevo torneo"
-            placeholderTextColor="#666"
-            value={newTName}
-            onChangeText={setNewTName}
-          />
-          <TouchableOpacity
-            onPress={createTournament}
-            style={{
-              backgroundColor: "#e91e63",
-              paddingHorizontal: 12,
-              marginLeft: 10,
-              borderRadius: 8,
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>Crear</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <FlatList
-        data={tournaments}
-        keyExtractor={(item) => item._id}
-        refreshing={loading}
-        onRefresh={fetchTournaments}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            onPress={() => setSelectedTournament(item)}
-            style={{
-              backgroundColor: "#111",
-              borderRadius: 10,
-              padding: 15,
-              marginBottom: 10,
-            }}
-          >
-            <Text style={{ color: "#fff", fontSize: 18 }}>{item.name}</Text>
-            <Text style={{ color: "#888" }}>{item.location}</Text>
-          </TouchableOpacity>
-        )}
-      />
-
-      <TouchableOpacity
-        onPress={goBack}
-        style={{ alignItems: "center", marginTop: 10 }}
-      >
-        <Text style={{ color: "#aaa" }}>← Volver</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  if (selectedTournament) return renderTournamentDetail();
-  return renderTournamentList();
 }
+
+// 💄 Estilos
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#0b0b0b" },
+  center: { justifyContent: "center", alignItems: "center" },
+  bigTitle: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#ff4040",
+    textAlign: "center",
+    marginBottom: 16,
+    textShadowColor: "#ff0000",
+    textShadowRadius: 20,
+  },
+  card: {
+    flexDirection: "row",
+    backgroundColor: "#111",
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e43b3b33",
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  cardText: { fontSize: 14, color: "#bbb", marginTop: 4 },
+  deleteButton: {
+    backgroundColor: "#e43b3b",
+    borderRadius: 8,
+    padding: 8,
+    marginLeft: 12,
+  },
+  backButton: {
+    backgroundColor: "#333",
+    padding: 12,
+    borderRadius: 10,
+    alignSelf: "center",
+    marginTop: 20,
+  },
+  backText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+});

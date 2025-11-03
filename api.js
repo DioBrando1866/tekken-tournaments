@@ -1,10 +1,16 @@
 // api.js
 import axios from "axios";
+import { Platform } from "react-native";
 
-const API = axios.create({
-  baseURL: "http://localhost:5000/api",
-});
+// 🧩 Detecta entorno y usa IP adecuada
+const baseURL =
+  Platform.OS === "android"
+    ? "http://10.0.2.2:5000/api" // ✅ Para Android Studio Emulator
+    : "http://localhost:5000/api"; // 💻 Para Web o iOS
 
+const API = axios.create({ baseURL });
+
+// 🔹 Endpoints
 export const getTournaments = () => API.get("/tournaments");
 export const createTournament = (data) => API.post("/tournaments", data);
 
