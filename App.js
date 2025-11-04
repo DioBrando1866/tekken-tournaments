@@ -11,6 +11,7 @@ import {
   Text,
   TouchableOpacity,
 } from "react-native";
+import "react-native-url-polyfill/auto";
 import CreateTournamentScreen from "./CreateTournamentScreen";
 import LoginScreen from "./LoginScreen";
 import ProfileScreen from "./ProfileScreen";

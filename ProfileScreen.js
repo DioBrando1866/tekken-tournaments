@@ -31,6 +31,7 @@ export default function ProfileScreen({ goBack }) {
   const [message, setMessage] = useState("");
   const [messageColor, setMessageColor] = useState("#fff");
 
+
   // 🔹 Cargar perfil desde Supabase
   useEffect(() => {
     const loadProfile = async () => {
@@ -67,46 +68,58 @@ export default function ProfileScreen({ goBack }) {
     loadProfile();
   }, []);
 
-  // 🔹 Guardar nuevo nombre
-  async function handleSave() {
-    try {
-      const { error } = await supabase
-        .from("users")
-        .update({ username: tempUser.username })
-        .eq("id", user.id);
+ // 🔹 Guardar nuevo nombre
+async function handleSave() {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .update({ username: tempUser.username })
+      .eq("id", user.id)
+      .select()
+      .single(); // <- devuelve la fila actualizada
 
-      if (error) throw error;
+    if (error) throw error;
 
-      setUser({ ...user, username: tempUser.username });
-      setEditing(false);
-      Alert.alert("✅ Cambios guardados", "Nombre de usuario actualizado.");
-    } catch (error) {
-      console.error("❌ Error guardando cambios:", error);
-      Alert.alert("Error", "No se pudo actualizar el nombre.");
-    }
+    setUser(data);
+    setEditing(false);
+    Alert.alert("✅ Cambios guardados", "Nombre de usuario actualizado.");
+  } catch (error) {
+    console.error("❌ Error guardando cambios:", error);
+    Alert.alert("Error", "No se pudo actualizar el nombre.");
+  }
+}
+
+
+async function handleChangePassword() {
+  // Verifica que haya algo en el campo y que tenga longitud mínima
+  if (!passwords.newPassword || passwords.newPassword.length < 6) {
+    setMessageColor("#ff4d4d");
+    setMessage("❌ La contraseña debe tener al menos 6 caracteres.");
+    return;
   }
 
-  // 🔹 Cambiar contraseña
-  async function handleChangePassword() {
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: passwords.newPassword,
-      });
+  try {
+    // Cambiar la contraseña en Supabase Auth
+    const { error } = await supabase.auth.updateUser({
+      password: passwords.newPassword,
+    });
 
-      if (error) throw error;
+    if (error) throw error;
 
-      setMessageColor("#4CAF50");
-      setMessage("✅ Contraseña actualizada correctamente.");
-      setPasswords({ newPassword: "" });
-      setChangingPassword(false);
-    } catch (error) {
-      console.error("❌ Error cambiando contraseña:", error);
-      setMessageColor("#ff4d4d");
-      setMessage("❌ Error al cambiar la contraseña.");
-    } finally {
-      setTimeout(() => setMessage(""), 3000);
-    }
+    setMessageColor("#4CAF50");
+    setMessage("✅ Contraseña actualizada correctamente.");
+    setPasswords({ newPassword: "" }); // limpiar campo
+    setChangingPassword(false);
+  } catch (error) {
+    console.error("❌ Error cambiando contraseña:", error);
+    setMessageColor("#ff4d4d");
+    setMessage("❌ Error al cambiar la contraseña.");
+  } finally {
+    setTimeout(() => setMessage(""), 3000);
   }
+}
+
+
 
   // 🔹 Cambiar imagen de perfil
   async function handleSelectImage(imageName) {

@@ -1,104 +1,69 @@
 import React, { useState } from "react";
-import {
-    Alert,
-    Image,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-} from "react-native";
-import { supabase } from "./apiSupabase";
-import { AnimatedBackground } from "./App";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { register } from "./authSupabase";
 
 export default function RegisterScreen({ goToLogin }) {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  async function handleRegister() {
-    if (!email || !password)
-      return Alert.alert("Campos vacíos", "Introduce correo y contraseña.");
-
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    setLoading(false);
-
-    if (error) {
-      console.error("❌ Error registro:", error.message);
-      return Alert.alert("Error", error.message);
+  const handleRegister = async () => {
+    try {
+      await register(email, password, username);
+      alert("Cuenta creada correctamente. Ahora inicia sesión.");
+      goToLogin();
+    } catch (err) {
+      setError(err.message);
     }
-
-    Alert.alert(
-      "✅ Registro exitoso",
-      "Revisa tu correo para confirmar la cuenta antes de iniciar sesión."
-    );
-    goToLogin();
-  }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <AnimatedBackground />
-      <Image
-        source={require("./assets/images/tekken-logo.png")}
-        style={{ width: 180, height: 70, resizeMode: "contain", marginBottom: 20 }}
-      />
-      <Text style={styles.title}>Registro</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Registrarse</Text>
 
       <TextInput
-        style={styles.input}
         placeholder="Correo electrónico"
         placeholderTextColor="#888"
-        keyboardType="email-address"
-        onChangeText={setEmail}
+        style={styles.input}
         value={email}
+        onChangeText={setEmail}
       />
       <TextInput
+        placeholder="Nombre de usuario"
+        placeholderTextColor="#888"
         style={styles.input}
+        value={username}
+        onChangeText={setUsername}
+      />
+      <TextInput
         placeholder="Contraseña"
         placeholderTextColor="#888"
+        style={styles.input}
         secureTextEntry
-        onChangeText={setPassword}
         value={password}
+        onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-        <Text style={styles.buttonText}>
-          {loading ? "Registrando..." : "Registrarse"}
-        </Text>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <TouchableOpacity style={styles.button} onPress={handleRegister}>
+        <Text style={styles.buttonText}>Registrarse</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={goToLogin}>
         <Text style={styles.link}>¿Ya tienes cuenta? Inicia sesión</Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0b0b0b" },
-  title: { color: "#ff4040", fontSize: 28, fontWeight: "bold", marginBottom: 20 },
-  input: {
-    backgroundColor: "#111",
-    color: "#fff",
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#e43b3b55",
-    marginVertical: 10,
-    width: 260,
-    textAlign: "center",
-  },
-  button: {
-    backgroundColor: "#e43b3b",
-    paddingVertical: 14,
-    borderRadius: 10,
-    width: 200,
-    marginTop: 10,
-  },
-  buttonText: { color: "#fff", fontWeight: "bold", textAlign: "center" },
-  link: { color: "#ff5050", marginTop: 20, textDecorationLine: "underline" },
+  container: { flex: 1, backgroundColor: "#0b0b0b", justifyContent: "center", alignItems: "center" },
+  title: { color: "#fff", fontSize: 28, marginBottom: 20 },
+  input: { width: 250, backgroundColor: "#111", color: "#fff", padding: 12, borderRadius: 8, marginBottom: 10 },
+  button: { backgroundColor: "#e43b3b", padding: 14, borderRadius: 8 },
+  buttonText: { color: "#fff", fontWeight: "700" },
+  link: { color: "#ff5050", marginTop: 12 },
+  error: { color: "#ff4040", marginBottom: 10 },
 });
