@@ -17,43 +17,44 @@ export default function CreateTournamentScreen({ goBack }) {
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 🧭 Obtener usuario actual (id y nombre/email)
-  async function getCurrentUser() {
+  // Función para obtener el ID y nombre del usuario actual desde Supabase
+  async function getUserDetails() {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session) {
       Alert.alert("Error", "No se encontró sesión activa.");
       return null;
     }
-
-    const user = session.user;
-    const userId = user.id;
-    const userName =
-      user.user_metadata?.name ||
-      user.email?.split("@")[0] || // usar parte antes del @ si no tiene nombre
-      "Usuario";
-
-    return { id: userId, name: userName };
+    return { userId: session.user.id, userName: session.user.username }; // Puedes cambiar email por el nombre si lo tienes
   }
 
-  // 🏆 Crear torneo
   async function createTournament() {
     if (!name.trim() || !date.trim()) {
       return Alert.alert("Campos vacíos", "Por favor completa todos los campos.");
     }
 
-    const user = await getCurrentUser();
-    if (!user) return;
+    const userDetails = await getUserDetails(); // ✅ esta sí existe
+if (!userDetails) return;
+
+const { userId } = userDetails;
+
+
+    // Obtener el nombre de usuario del creador
+    const { data: userData, error: userError } = await supabase
+      .from("users")
+      .select("username")
+      .eq("id", userId)
+      .single();
+
+    if (userError || !userData) {
+      Alert.alert("Error", "No se pudo obtener el nombre de usuario.");
+      return;
+    }
 
     setLoading(true);
     try {
-      const { error } = await supabase.from("tournaments").insert([
-        {
-          name,
-          date,
-          created_by: user.id,     // 🔹 ID del usuario
-          creator_name: user.name, // 🔹 Nombre del usuario
-        },
-      ]);
+      const { data, error } = await supabase
+        .from("tournaments")
+        .insert([{ name, date, creator_id: userId, creator_name: userData.username }]); // Incluir el creator_name
 
       if (error) throw error;
 
@@ -65,7 +66,8 @@ export default function CreateTournamentScreen({ goBack }) {
     } finally {
       setLoading(false);
     }
-  }
+}
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -73,12 +75,7 @@ export default function CreateTournamentScreen({ goBack }) {
       <ScrollView contentContainerStyle={styles.authContainer}>
         <Image
           source={require("./assets/images/tekken-logo.png")}
-          style={{
-            width: 180,
-            height: 70,
-            resizeMode: "contain",
-            marginBottom: 10,
-          }}
+          style={{ width: 180, height: 70, resizeMode: "contain", marginBottom: 10 }}
         />
         <Text style={styles.bigTitle}>CREAR TORNEO</Text>
 
@@ -133,12 +130,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginVertical: 10,
   },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 16,
-    textAlign: "center",
-  },
+  buttonText: { color: "#fff", fontWeight: "800", fontSize: 16, textAlign: "center" },
   input: {
     backgroundColor: "#111",
     color: "#fff",
@@ -150,15 +142,6 @@ const styles = StyleSheet.create({
     width: 260,
     textAlign: "center",
   },
-  authContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  link: {
-    color: "#ff5050",
-    marginTop: 12,
-    fontSize: 14,
-    textDecorationLine: "underline",
-  },
+  authContainer: { justifyContent: "center", alignItems: "center", padding: 24 },
+  link: { color: "#ff5050", marginTop: 12, fontSize: 14, textDecorationLine: "underline" },
 });

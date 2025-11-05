@@ -96,6 +96,24 @@ export default function App() {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  const [username, setUsername] = useState("");
+
+  useEffect(() => {
+    async function fetchUsername() {
+      if (!user) return;
+  
+      const { data, error } = await supabase
+        .from("users")
+        .select("username")
+        .eq("id", user.id)
+        .single();
+  
+      if (!error && data) setUsername(data.username);
+    }
+  
+    fetchUsername();
+  }, [user]);
+
   // Fade in al cargar cada pantalla
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -190,8 +208,17 @@ export default function App() {
 
   if (screen === "profile")
     return <ProfileScreen goBack={() => setScreen("hub")} user={user} />;
+  
+  if (screen === "details")
+    return <TournamentDetailScreen goBack={() => setScreen("view")} tournament={selectedTournament} />;
+
+  if (screen === "bracket")
+    return <BracketScreen tournament={selectedTournament} goBack={() => setScreen("view")} />;
+  
+  
 
   // ---------- Pantalla Hub ----------
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       <AnimatedBackground />
@@ -199,7 +226,7 @@ export default function App() {
         <TekkenLogo />
         <Text style={styles.bigTitle}>TEKKEN TOURNAMENTS HUB</Text>
         <Text style={styles.subtitle}>
-          Bienvenido {user?.email || "luchador"}
+          Bienvenido {username || "luchador"}
         </Text>
 
         <TouchableOpacity

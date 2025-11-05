@@ -11,26 +11,23 @@ import {
 } from "react-native";
 import { supabase } from "./apiSupabase";
 import { AnimatedBackground } from "./App";
+import BracketScreen from "./BracketScreen";
+import TournamentDetailScreen from "./TournamentDetailScreen";
 
 export default function TournamentModule({ goBack }) {
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
+  const [selectedTournament, setSelectedTournament] = useState(null);
+  const [selectedBracket, setSelectedBracket] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
-  // 🧭 Obtener usuario logueado
   async function fetchUser() {
     const { data, error } = await supabase.auth.getUser();
-    if (error) {
-      console.error("Error obteniendo usuario:", error);
-    } else {
-      setCurrentUser(data.user);
-      console.log("Usuario actual:", data.user);
-    }
+    if (!error) setCurrentUser(data.user);
   }
 
-  // 📦 Obtener torneos
   async function fetchTournaments() {
     setLoading(true);
     try {
@@ -38,12 +35,7 @@ export default function TournamentModule({ goBack }) {
         .from("tournaments")
         .select("*")
         .order("date", { ascending: true });
-
-      if (error) throw error;
-      console.log("Torneos obtenidos:", data);
-      setTournaments(data || []);
-    } catch (err) {
-      console.error("❌ Error obteniendo torneos:", err);
+      if (!error) setTournaments(data || []);
     } finally {
       setLoading(false);
     }
@@ -54,25 +46,33 @@ export default function TournamentModule({ goBack }) {
     fetchTournaments();
   }, []);
 
-  // 🗑 Eliminar torneo
   async function deleteTournament() {
     if (!selectedId) return;
-    console.log("Eliminando torneo con ID:", selectedId);
-
-    try {
-      const { data, error } = await supabase
-        .from("tournaments")
-        .delete()
-        .eq("id", selectedId);
-
-      if (error) throw error;
-
-      console.log("✅ Torneo eliminado:", data);
+    const { error } = await supabase.from("tournaments").delete().eq("id", selectedId);
+    if (!error) {
       setShowModal(false);
       fetchTournaments();
-    } catch (err) {
-      console.error("Error en la eliminación:", err);
     }
+  }
+
+  // ✅ Mostrar pantalla de detalle de torneo
+  if (selectedTournament) {
+    return (
+      <TournamentDetailScreen
+        tournament={selectedTournament}
+        goBack={() => setSelectedTournament(null)}
+      />
+    );
+  }
+
+  // ✅ Mostrar pantalla del Bracket
+  if (selectedBracket) {
+    return (
+      <BracketScreen
+        tournament={selectedBracket}
+        goBack={() => setSelectedBracket(null)}
+      />
+    );
   }
 
   if (loading)
@@ -99,8 +99,7 @@ export default function TournamentModule({ goBack }) {
             data={tournaments}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => {
-              const isCreator = currentUser?.id === item.created_by;
-
+              const isCreator = currentUser?.id === item.creator_id;
               return (
                 <View style={styles.card}>
                   <View style={{ flex: 1 }}>
@@ -111,6 +110,23 @@ export default function TournamentModule({ goBack }) {
                     </Text>
                   </View>
 
+                  {/* Botón para ver detalle */}
+                  <TouchableOpacity
+                    style={styles.detailButton}
+                    onPress={() => setSelectedTournament(item)}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "bold" }}>🔍</Text>
+                  </TouchableOpacity>
+
+                  {/* Botón para ver bracket */}
+                  <TouchableOpacity
+                    style={styles.bracketButton}
+                    onPress={() => setSelectedBracket(item)}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "bold" }}>🏆</Text>
+                  </TouchableOpacity>
+
+                  {/* Botón para eliminar si es el creador */}
                   {isCreator && (
                     <TouchableOpacity
                       style={styles.deleteButton}
@@ -133,19 +149,12 @@ export default function TournamentModule({ goBack }) {
         </TouchableOpacity>
       </View>
 
-      {/* 🔥 Modal de confirmación */}
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowModal(false)}
-      >
+      {/* Modal para confirmar borrado */}
+      <Modal visible={showModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>¿Eliminar torneo?</Text>
-            <Text style={styles.modalText}>
-              Esta acción no se puede deshacer.
-            </Text>
+            <Text style={styles.modalText}>Esta acción no se puede deshacer.</Text>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -169,7 +178,6 @@ export default function TournamentModule({ goBack }) {
   );
 }
 
-// 💄 Estilos
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0b0b0b" },
   center: { justifyContent: "center", alignItems: "center" },
@@ -192,23 +200,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e43b3b33",
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#fff",
-  },
+  cardTitle: { fontSize: 18, fontWeight: "bold", color: "#fff" },
   cardText: { fontSize: 14, color: "#bbb", marginTop: 4 },
-  creatorText: {
-    fontSize: 13,
-    color: "#888",
-    marginTop: 6,
-    fontStyle: "italic",
+  creatorText: { fontSize: 13, color: "#888", marginTop: 6, fontStyle: "italic" },
+  detailButton: {
+    backgroundColor: "#555",
+    borderRadius: 8,
+    padding: 8,
+    marginLeft: 8,
   },
-  deleteButton: {
+  bracketButton: {
     backgroundColor: "#e43b3b",
     borderRadius: 8,
     padding: 8,
-    marginLeft: 12,
+    marginLeft: 8,
+  },
+  deleteButton: {
+    backgroundColor: "#b00000",
+    borderRadius: 8,
+    padding: 8,
+    marginLeft: 8,
   },
   backButton: {
     backgroundColor: "#333",
@@ -217,11 +228,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginTop: 20,
   },
-  backText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
+  backText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   modalOverlay: {
     flex: 1,
     justifyContent: "center",
@@ -261,8 +268,5 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
   },
-  modalBtnText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
+  modalBtnText: { color: "#fff", fontWeight: "bold" },
 });
