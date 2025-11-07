@@ -13,6 +13,7 @@ import { supabase } from "./apiSupabase";
 import { AnimatedBackground } from "./App";
 import BracketScreen from "./BracketScreen";
 import TournamentDetailScreen from "./TournamentDetailScreen";
+import TournamentDetailWithBracket from "./TournamentDetailWithBracket";
 
 export default function TournamentModule({ goBack }) {
   const [tournaments, setTournaments] = useState([]);
@@ -21,13 +22,16 @@ export default function TournamentModule({ goBack }) {
   const [selectedId, setSelectedId] = useState(null);
   const [selectedTournament, setSelectedTournament] = useState(null);
   const [selectedBracket, setSelectedBracket] = useState(null);
+  const [selectedTournamentWithBracket, setSelectedTournamentWithBracket] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
 
+  // 🔹 Obtener usuario actual
   async function fetchUser() {
     const { data, error } = await supabase.auth.getUser();
     if (!error) setCurrentUser(data.user);
   }
 
+  // 🔹 Obtener lista de torneos
   async function fetchTournaments() {
     setLoading(true);
     try {
@@ -46,6 +50,7 @@ export default function TournamentModule({ goBack }) {
     fetchTournaments();
   }, []);
 
+  // 🔹 Eliminar torneo
   async function deleteTournament() {
     if (!selectedId) return;
     const { error } = await supabase.from("tournaments").delete().eq("id", selectedId);
@@ -55,7 +60,7 @@ export default function TournamentModule({ goBack }) {
     }
   }
 
-  // ✅ Mostrar pantalla de detalle de torneo
+  // 🔹 Mostrar detalle clásico
   if (selectedTournament) {
     return (
       <TournamentDetailScreen
@@ -65,7 +70,7 @@ export default function TournamentModule({ goBack }) {
     );
   }
 
-  // ✅ Mostrar pantalla del Bracket
+  // 🔹 Mostrar bracket antiguo
   if (selectedBracket) {
     return (
       <BracketScreen
@@ -75,6 +80,17 @@ export default function TournamentModule({ goBack }) {
     );
   }
 
+  // 🔹 Mostrar bracket con líneas (nuevo)
+  if (selectedTournamentWithBracket) {
+    return (
+      <TournamentDetailWithBracket
+        tournament={selectedTournamentWithBracket}
+        goBack={() => setSelectedTournamentWithBracket(null)}
+      />
+    );
+  }
+
+  // 🔹 Mostrar carga
   if (loading)
     return (
       <SafeAreaView style={[styles.container, styles.center]}>
@@ -84,6 +100,7 @@ export default function TournamentModule({ goBack }) {
       </SafeAreaView>
     );
 
+  // 🔹 Pantalla principal
   return (
     <SafeAreaView style={styles.container}>
       <AnimatedBackground />
@@ -110,7 +127,7 @@ export default function TournamentModule({ goBack }) {
                     </Text>
                   </View>
 
-                  {/* Botón para ver detalle */}
+                  {/* 🔹 Ver detalle */}
                   <TouchableOpacity
                     style={styles.detailButton}
                     onPress={() => setSelectedTournament(item)}
@@ -118,15 +135,15 @@ export default function TournamentModule({ goBack }) {
                     <Text style={{ color: "#fff", fontWeight: "bold" }}>🔍</Text>
                   </TouchableOpacity>
 
-                  {/* Botón para ver bracket */}
+                  {/* 🔹 Ver bracket visual */}
                   <TouchableOpacity
                     style={styles.bracketButton}
-                    onPress={() => setSelectedBracket(item)}
+                    onPress={() => setSelectedTournamentWithBracket(item)}
                   >
                     <Text style={{ color: "#fff", fontWeight: "bold" }}>🏆</Text>
                   </TouchableOpacity>
 
-                  {/* Botón para eliminar si es el creador */}
+                  {/* 🔹 Eliminar si es el creador */}
                   {isCreator && (
                     <TouchableOpacity
                       style={styles.deleteButton}
@@ -144,12 +161,13 @@ export default function TournamentModule({ goBack }) {
           />
         )}
 
+        {/* 🔹 Botón de volver */}
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Text style={styles.backText}>Volver</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Modal para confirmar borrado */}
+      {/* 🔹 Modal de confirmación */}
       <Modal visible={showModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -178,6 +196,7 @@ export default function TournamentModule({ goBack }) {
   );
 }
 
+// ---------- 🎨 Estilos ----------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0b0b0b" },
   center: { justifyContent: "center", alignItems: "center" },

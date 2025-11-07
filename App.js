@@ -82,7 +82,7 @@ const TekkenLogo = () => {
     >
       <Image
         source={require("./assets/images/tekken-logo.png")}
-        style={{ width: 200, height: 80, resizeMode: "contain" }}
+        style={{ width: 400, height: 160, resizeMode: "contain" }}
       />
     </Animated.View>
   );
