@@ -9,7 +9,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { supabase } from "./apiSupabase";
 
@@ -30,16 +30,14 @@ export default function ProfileScreen({ goBack }) {
   const [passwords, setPasswords] = useState({ newPassword: "" });
   const [message, setMessage] = useState("");
   const [messageColor, setMessageColor] = useState("#fff");
-
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmationInput, setConfirmationInput] = useState("");
 
   // 🔹 Cargar perfil desde Supabase
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           console.warn("⚠️ No hay sesión activa");
           setLoading(false);
@@ -47,12 +45,7 @@ export default function ProfileScreen({ goBack }) {
         }
 
         const userId = session.user.id;
-
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", userId)
-          .single();
+        const { data, error } = await supabase.from("users").select("*").eq("id", userId).single();
 
         if (error) throw error;
 
@@ -68,67 +61,50 @@ export default function ProfileScreen({ goBack }) {
     loadProfile();
   }, []);
 
- // 🔹 Guardar nuevo nombre
-async function handleSave() {
-  try {
-    const { data, error } = await supabase
-      .from("users")
-      .update({ username: tempUser.username })
-      .eq("id", user.id)
-      .select()
-      .single(); // <- devuelve la fila actualizada
+  // 🔹 Guardar nuevo nombre
+  async function handleSave() {
+    try {
+      const { data, error } = await supabase.from("users").update({ username: tempUser.username }).eq("id", user.id).select().single();
+      if (error) throw error;
 
-    if (error) throw error;
-
-    setUser(data);
-    setEditing(false);
-    Alert.alert("✅ Cambios guardados", "Nombre de usuario actualizado.");
-  } catch (error) {
-    console.error("❌ Error guardando cambios:", error);
-    Alert.alert("Error", "No se pudo actualizar el nombre.");
-  }
-}
-
-
-async function handleChangePassword() {
-  // Verifica que haya algo en el campo y que tenga longitud mínima
-  if (!passwords.newPassword || passwords.newPassword.length < 6) {
-    setMessageColor("#ff4d4d");
-    setMessage("❌ La contraseña debe tener al menos 6 caracteres.");
-    return;
+      setUser(data);
+      setEditing(false);
+      Alert.alert("✅ Cambios guardados", "Nombre de usuario actualizado.");
+    } catch (error) {
+      console.error("❌ Error guardando cambios:", error);
+      Alert.alert("Error", "No se pudo actualizar el nombre.");
+    }
   }
 
-  try {
-    // Cambiar la contraseña en Supabase Auth
-    const { error } = await supabase.auth.updateUser({
-      password: passwords.newPassword,
-    });
+  // 🔹 Cambiar la contraseña
+  async function handleChangePassword() {
+    if (!passwords.newPassword || passwords.newPassword.length < 6) {
+      setMessageColor("#ff4d4d");
+      setMessage("❌ La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
 
-    if (error) throw error;
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwords.newPassword });
+      if (error) throw error;
 
-    setMessageColor("#4CAF50");
-    setMessage("✅ Contraseña actualizada correctamente.");
-    setPasswords({ newPassword: "" }); // limpiar campo
-    setChangingPassword(false);
-  } catch (error) {
-    console.error("❌ Error cambiando contraseña:", error);
-    setMessageColor("#ff4d4d");
-    setMessage("❌ Error al cambiar la contraseña.");
-  } finally {
-    setTimeout(() => setMessage(""), 3000);
+      setMessageColor("#4CAF50");
+      setMessage("✅ Contraseña actualizada correctamente.");
+      setPasswords({ newPassword: "" });
+      setChangingPassword(false);
+    } catch (error) {
+      console.error("❌ Error cambiando contraseña:", error);
+      setMessageColor("#ff4d4d");
+      setMessage("❌ Error al cambiar la contraseña.");
+    } finally {
+      setTimeout(() => setMessage(""), 3000);
+    }
   }
-}
-
-
 
   // 🔹 Cambiar imagen de perfil
   async function handleSelectImage(imageName) {
     try {
-      const { error } = await supabase
-        .from("users")
-        .update({ profile_image: imageName })
-        .eq("id", user.id);
-
+      const { error } = await supabase.from("users").update({ profile_image: imageName }).eq("id", user.id);
       if (error) throw error;
 
       setUser({ ...user, profile_image: imageName });
@@ -138,6 +114,36 @@ async function handleChangePassword() {
       Alert.alert("Error", "No se pudo cambiar la imagen de perfil.");
     }
   }
+
+  async function handleDeleteAccount() {
+    // Verificar que la entrada de confirmación sea "DELETE"
+    if (confirmationInput === "DELETE") {
+      try {
+        // 1. Eliminar el registro del usuario en la tabla 'users'
+        const { error: deleteUserError } = await supabase.from("users").delete().eq("id", user.id);
+        if (deleteUserError) throw deleteUserError;
+  
+        // 2. Cerrar sesión del usuario
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) throw signOutError;
+  
+        // 3. Eliminar usuario desde Supabase Auth
+        const { error: deleteAuthError } = await supabase.auth.api.deleteUser(user.id);
+        if (deleteAuthError) throw deleteAuthError;
+  
+        Alert.alert("Cuenta eliminada", "Tu cuenta ha sido eliminada correctamente.");
+        goBack(); // Volver a la pantalla anterior después de la eliminación
+      } catch (error) {
+        console.error("❌ Error eliminando cuenta:", error);
+        Alert.alert("Error", "Hubo un problema al eliminar la cuenta.");
+      }
+    } else {
+      Alert.alert("Error", "Debes escribir 'DELETE' para confirmar.");
+    }
+  }
+  
+  
+  
 
   if (loading) {
     return (
@@ -163,12 +169,9 @@ async function handleChangePassword() {
       {/* Imagen de perfil */}
       <View style={{ alignItems: "center", marginBottom: 20 }}>
         <Image
-          source={
-            profileImages[user.profile_image] || profileImages["random.png"]
-          }
+          source={profileImages[user.profile_image] || profileImages["random.png"]}
           style={styles.profileImage}
         />
-
         <TouchableOpacity
           style={styles.changeImageButton}
           onPress={() => setSelectingImage(true)}
@@ -296,10 +299,45 @@ async function handleChangePassword() {
           </Text>
         ) : null}
 
+        {/* Botón para eliminar cuenta */}
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={() => setShowDeleteModal(true)}
+        >
+          <Text style={styles.buttonText}>❌ Eliminar cuenta</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.backButton} onPress={goBack}>
           <Text style={styles.buttonText}>← Volver al Hub</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Modal de confirmación para eliminar cuenta */}
+      <Modal visible={showDeleteModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Confirmar eliminación de cuenta</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Escribe 'DELETE' para confirmar"
+              value={confirmationInput}
+              onChangeText={setConfirmationInput}
+            />
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={handleDeleteAccount}
+            >
+              <Text style={styles.buttonText}>Eliminar cuenta</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setShowDeleteModal(false)}
+            >
+              <Text style={styles.buttonText}>❌ Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -317,7 +355,7 @@ const styles = StyleSheet.create({
   label: { color: "#ffd700", fontSize: 14, marginBottom: 6 },
   value: { color: "#fff", fontSize: 16 },
   input: {
-    backgroundColor: "#111",
+    backgroundColor: "#222",
     color: "#fff",
     padding: 10,
     borderRadius: 8,
@@ -365,6 +403,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginBottom: 10,
+  },
+  deleteAccountButton: {
+    backgroundColor: "#ff4d4d",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  deleteButton: {
+    backgroundColor: "#ff4d4d",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
   },
   backButton: {
     backgroundColor: "#333",
