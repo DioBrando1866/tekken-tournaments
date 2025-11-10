@@ -50,14 +50,35 @@ export default function TournamentModule({ goBack }) {
     fetchTournaments();
   }, []);
 
-  // 🔹 Eliminar torneo
+  // 🔹 Eliminar torneo junto con matches y players
   async function deleteTournament() {
     if (!selectedId) return;
-    const { error } = await supabase.from("tournaments").delete().eq("id", selectedId);
-    if (!error) {
+
+    try {
+      // Borrar matches
+      await supabase.from("matches").delete().eq("tournament_id", selectedId);
+
+      // Borrar players
+      await supabase.from("players").delete().eq("tournament_id", selectedId);
+
+      // Borrar torneo
+      const { error } = await supabase.from("tournaments").delete().eq("id", selectedId);
+      if (error) throw error;
+
       setShowModal(false);
       fetchTournaments();
+    } catch (err) {
+      console.error(err);
+      Alert.alert(
+        "Error",
+        "No se pudo eliminar el torneo. Debes borrar primero sus jugadores y enfrentamientos."
+      );
     }
+  }
+
+  // 🔹 Verificar si el usuario es el creador
+  function isCreator(tournament) {
+    return currentUser?.id === tournament.creator_id;
   }
 
   // 🔹 Mostrar detalle clásico
@@ -90,7 +111,7 @@ export default function TournamentModule({ goBack }) {
     );
   }
 
-  // 🔹 Mostrar carga
+  // 🔹 Pantalla principal
   if (loading)
     return (
       <SafeAreaView style={[styles.container, styles.center]}>
@@ -100,7 +121,7 @@ export default function TournamentModule({ goBack }) {
       </SafeAreaView>
     );
 
-  // 🔹 Pantalla principal
+  // 🔹 Pantalla principal con validación de acceso
   return (
     <SafeAreaView style={styles.container}>
       <AnimatedBackground />
@@ -116,7 +137,7 @@ export default function TournamentModule({ goBack }) {
             data={tournaments}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => {
-              const isCreator = currentUser?.id === item.creator_id;
+              const isCreatorFlag = isCreator(item);
               return (
                 <View style={styles.card}>
                   <View style={{ flex: 1 }}>
@@ -132,19 +153,21 @@ export default function TournamentModule({ goBack }) {
                     style={styles.detailButton}
                     onPress={() => setSelectedTournament(item)}
                   >
-                    <Text style={{ color: "#fff", fontWeight: "bold" }}>🔍</Text>
+                    <Text style={{ color: "#fff", fontWeight: "bold" }}>Ver torneo</Text>
                   </TouchableOpacity>
 
-                  {/* 🔹 Ver bracket visual */}
-                  <TouchableOpacity
-                    style={styles.bracketButton}
-                    onPress={() => setSelectedTournamentWithBracket(item)}
-                  >
-                    <Text style={{ color: "#fff", fontWeight: "bold" }}>🏆</Text>
-                  </TouchableOpacity>
+                  {/* 🔹 Ver bracket visual solo si es creador */}
+                  {isCreatorFlag && (
+                    <TouchableOpacity
+                      style={styles.bracketButton}
+                      onPress={() => setSelectedTournamentWithBracket(item)}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "bold" }}>✏️ Editar</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {/* 🔹 Eliminar si es el creador */}
-                  {isCreator && (
+                  {isCreatorFlag && (
                     <TouchableOpacity
                       style={styles.deleteButton}
                       onPress={() => {
