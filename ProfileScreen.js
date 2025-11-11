@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Button,
   Image,
   Modal,
   ScrollView,
@@ -9,7 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import { supabase } from "./apiSupabase";
 
@@ -20,7 +21,7 @@ const profileImages = {
   "Thumbnail-King.webp": require("./assets/images/profile-pics/Thumbnail-King.webp"),
 };
 
-export default function ProfileScreen({ goBack }) {
+export default function ProfileScreen({ goBack, setScreen }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -32,6 +33,8 @@ export default function ProfileScreen({ goBack }) {
   const [messageColor, setMessageColor] = useState("#fff");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [confirmationInput, setConfirmationInput] = useState("");
+  const [bio, setBio] = useState("");
+  const [status, setStatus] = useState("");
 
   // 🔹 Cargar perfil desde Supabase
   useEffect(() => {
@@ -51,6 +54,8 @@ export default function ProfileScreen({ goBack }) {
 
         setUser(data);
         setTempUser(data);
+        setBio(data.bio || "");
+        setStatus(data.status || "");
       } catch (err) {
         console.error("❌ Error cargando perfil:", err);
       } finally {
@@ -64,15 +69,15 @@ export default function ProfileScreen({ goBack }) {
   // 🔹 Guardar nuevo nombre
   async function handleSave() {
     try {
-      const { data, error } = await supabase.from("users").update({ username: tempUser.username }).eq("id", user.id).select().single();
+      const { data, error } = await supabase.from("users").update({ username: tempUser.username, bio, status }).eq("id", user.id).select().single();
       if (error) throw error;
 
       setUser(data);
       setEditing(false);
-      Alert.alert("✅ Cambios guardados", "Nombre de usuario actualizado.");
+      Alert.alert("✅ Cambios guardados", "Nombre de usuario y otros cambios guardados.");
     } catch (error) {
       console.error("❌ Error guardando cambios:", error);
-      Alert.alert("Error", "No se pudo actualizar el nombre.");
+      Alert.alert("Error", "No se pudo guardar los cambios.");
     }
   }
 
@@ -116,34 +121,40 @@ export default function ProfileScreen({ goBack }) {
   }
 
   async function handleDeleteAccount() {
-    // Verificar que la entrada de confirmación sea "DELETE"
-    if (confirmationInput === "DELETE") {
-      try {
-        // 1. Eliminar el registro del usuario en la tabla 'users'
-        const { error: deleteUserError } = await supabase.from("users").delete().eq("id", user.id);
-        if (deleteUserError) throw deleteUserError;
-  
-        // 2. Cerrar sesión del usuario
-        const { error: signOutError } = await supabase.auth.signOut();
-        if (signOutError) throw signOutError;
-  
-        // 3. Eliminar usuario desde Supabase Auth
-        const { error: deleteAuthError } = await supabase.auth.api.deleteUser(user.id);
-        if (deleteAuthError) throw deleteAuthError;
-  
-        Alert.alert("Cuenta eliminada", "Tu cuenta ha sido eliminada correctamente.");
-        goBack(); // Volver a la pantalla anterior después de la eliminación
-      } catch (error) {
-        console.error("❌ Error eliminando cuenta:", error);
-        Alert.alert("Error", "Hubo un problema al eliminar la cuenta.");
-      }
-    } else {
+    if (confirmationInput !== "DELETE") {
       Alert.alert("Error", "Debes escribir 'DELETE' para confirmar.");
+      return;
+    }
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        Alert.alert("Error", "No estás autenticado.");
+        return;
+      }
+
+      const response = await fetch("https://nfnordyuqwenbgjzvlql.supabase.co/functions/v1/deleteUser", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        Alert.alert("Cuenta eliminada", "Tu cuenta ha sido eliminada correctamente.");
+        setScreen("login"); // Redirige a la pantalla de login después de eliminar la cuenta
+      } else {
+        throw new Error(data.error || "Error eliminando la cuenta");
+      }
+    } catch (error) {
+      console.error("❌ Error eliminando cuenta:", error);
+      Alert.alert("Error", "Hubo un problema al eliminar la cuenta.");
     }
   }
-  
-  
-  
 
   if (loading) {
     return (
@@ -164,10 +175,15 @@ export default function ProfileScreen({ goBack }) {
 
   return (
     <ScrollView style={styles.container}>
+      {/* Botón Volver al Hub */}
+      <TouchableOpacity onPress={() => setScreen("hub")}>
+        <Text style={styles.backButton}>← Volver al Hub</Text>
+      </TouchableOpacity>
+
       <Text style={styles.title}>Perfil del Usuario</Text>
 
       {/* Imagen de perfil */}
-      <View style={{ alignItems: "center", marginBottom: 20 }}>
+      <View style={{ alignItems: "center", marginBottom: 30 }}>
         <Image
           source={profileImages[user.profile_image] || profileImages["random.png"]}
           style={styles.profileImage}
@@ -208,133 +224,99 @@ export default function ProfileScreen({ goBack }) {
         </View>
       </Modal>
 
-      {/* Usuario */}
+      {/* Nombre de usuario */}
       <View style={styles.section}>
         <Text style={styles.label}>Nombre de usuario:</Text>
         {editing ? (
           <TextInput
             style={styles.input}
             value={tempUser.username}
-            onChangeText={(text) =>
-              setTempUser({ ...tempUser, username: text })
-            }
+            onChangeText={(text) => setTempUser({ ...tempUser, username: text })}
           />
         ) : (
           <Text style={styles.value}>{user.username}</Text>
         )}
       </View>
 
-      {/* Botones principales */}
-      <View style={styles.buttons}>
+      {/* Biografía */}
+      <View style={styles.section}>
+        <Text style={styles.label}>Biografía:</Text>
         {editing ? (
-          <>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.buttonText}>💾 Guardar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => {
-                setTempUser(user);
-                setEditing(false);
-              }}
-            >
-              <Text style={styles.buttonText}>❌ Cancelar</Text>
-            </TouchableOpacity>
-          </>
+          <TextInput
+            style={[styles.input, { height: 80 }]}
+            multiline
+            value={bio}
+            onChangeText={setBio}
+          />
         ) : (
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => setEditing(true)}
-          >
-            <Text style={styles.buttonText}>✏️ Editar nombre</Text>
-          </TouchableOpacity>
+          <Text style={styles.value}>{bio || "No has añadido una biografía."}</Text>
         )}
-
-        {!changingPassword && (
-          <TouchableOpacity
-            style={styles.changePasswordButton}
-            onPress={() => setChangingPassword(true)}
-          >
-            <Text style={styles.buttonText}>🔒 Cambiar contraseña</Text>
-          </TouchableOpacity>
-        )}
-
-        {changingPassword && (
-          <View style={styles.section}>
-            <Text style={styles.label}>Nueva contraseña:</Text>
-            <TextInput
-              secureTextEntry
-              style={styles.input}
-              value={passwords.newPassword}
-              onChangeText={(text) =>
-                setPasswords({ ...passwords, newPassword: text })
-              }
-            />
-
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={handleChangePassword}
-            >
-              <Text style={styles.buttonText}>💾 Guardar nueva contraseña</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setChangingPassword(false)}
-            >
-              <Text style={styles.buttonText}>❌ Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {message ? (
-          <Text
-            style={{
-              color: messageColor,
-              textAlign: "center",
-              marginVertical: 10,
-            }}
-          >
-            {message}
-          </Text>
-        ) : null}
-
-        {/* Botón para eliminar cuenta */}
-        <TouchableOpacity
-          style={styles.deleteAccountButton}
-          onPress={() => setShowDeleteModal(true)}
-        >
-          <Text style={styles.buttonText}>❌ Eliminar cuenta</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.backButton} onPress={goBack}>
-          <Text style={styles.buttonText}>← Volver al Hub</Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Modal de confirmación para eliminar cuenta */}
+      {/* Estado personal */}
+      <View style={styles.section}>
+        <Text style={styles.label}>Estado personal:</Text>
+        {editing ? (
+          <TextInput
+            style={styles.input}
+            value={status}
+            onChangeText={setStatus}
+          />
+        ) : (
+          <Text style={styles.value}>{status || "No tienes un estado personal."}</Text>
+        )}
+      </View>
+
+      {/* Cambiar contraseña */}
+      {editing && (
+        <View style={styles.section}>
+          <Text style={styles.label}>Cambiar contraseña:</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Nueva contraseña"
+            secureTextEntry
+            value={passwords.newPassword}
+            onChangeText={(text) => setPasswords({ newPassword: text })}
+          />
+          <Button title="Guardar contraseña" onPress={handleChangePassword} />
+        </View>
+      )}
+
+      {/* Guardar cambios */}
+      {editing ? (
+        <View style={styles.actions}>
+          <Button title="Guardar cambios" onPress={handleSave} />
+          <Button title="Cancelar" onPress={() => setEditing(false)} />
+        </View>
+      ) : (
+        <TouchableOpacity onPress={() => setEditing(true)}>
+          <Text style={styles.editButton}>Editar perfil</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Mensajes */}
+      {message && <Text style={[styles.message, { color: messageColor }]}>{message}</Text>}
+
+      {/* Eliminar cuenta */}
+      <TouchableOpacity onPress={() => setShowDeleteModal(true)}>
+        <Text style={styles.deleteButton}>Eliminar cuenta</Text>
+      </TouchableOpacity>
+
+      {/* Modal para confirmar eliminación */}
       <Modal visible={showDeleteModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Confirmar eliminación de cuenta</Text>
+            <Text style={styles.modalTitle}>Eliminar cuenta</Text>
             <TextInput
               style={styles.input}
               placeholder="Escribe 'DELETE' para confirmar"
               value={confirmationInput}
               onChangeText={setConfirmationInput}
             />
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={handleDeleteAccount}
-            >
-              <Text style={styles.buttonText}>Eliminar cuenta</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={() => setShowDeleteModal(false)}
-            >
-              <Text style={styles.buttonText}>❌ Cancelar</Text>
-            </TouchableOpacity>
+            <View style={styles.actions}>
+              <Button title="Eliminar" onPress={handleDeleteAccount} />
+              <Button title="Cancelar" onPress={() => setShowDeleteModal(false)} />
+            </View>
           </View>
         </View>
       </Modal>
@@ -343,119 +325,112 @@ export default function ProfileScreen({ goBack }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0a0a0a", padding: 16 },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#fff",
-    marginBottom: 20,
-    textAlign: "center",
+  container: {
+    flex: 1,
+    backgroundColor: "#0b0b0b",
+    padding: 30,
   },
-  section: { marginBottom: 16 },
-  label: { color: "#ffd700", fontSize: 14, marginBottom: 6 },
-  value: { color: "#fff", fontSize: 16 },
+  backButton: {
+    color: "#fff",
+    fontSize: 22,
+    marginBottom: 30,
+  },
+  title: {
+    color: "#fff",
+    fontSize: 30,
+    textAlign: "center",
+    marginBottom: 30,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  label: {
+    color: "#ddd",
+    fontSize: 20,
+  },
+  value: {
+    color: "#fff",
+    fontSize: 20,
+  },
   input: {
     backgroundColor: "#222",
     color: "#fff",
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#333",
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 15,
+    fontSize: 18,
   },
   profileImage: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    borderWidth: 2,
-    borderColor: "#ffd700",
-  },
-  buttons: { marginTop: 20 },
-  editButton: {
-    backgroundColor: "#e43b3b",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 10,
   },
   changeImageButton: {
-    backgroundColor: "#444",
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 10,
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: "#ff5050",
+    borderRadius: 12,
   },
-  changePasswordButton: {
-    backgroundColor: "#0066cc",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 10,
+  buttonText: {
+    color: "#fff",
+    fontWeight: "700",
   },
-  saveButton: {
-    backgroundColor: "#28a745",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  cancelButton: {
-    backgroundColor: "#555",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  deleteAccountButton: {
-    backgroundColor: "#ff4d4d",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginBottom: 10,
+  editButton: {
+    color: "#00bcd4",
+    fontSize: 22,
+    textAlign: "center",
+    marginTop: 20,
   },
   deleteButton: {
-    backgroundColor: "#ff4d4d",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
+    color: "#ff0000",
+    fontSize: 22,
+    textAlign: "center",
+    marginTop: 30,
   },
-  backButton: {
-    backgroundColor: "#333",
-    padding: 10,
-    borderRadius: 8,
-    alignItems: "center",
+  message: {
+    marginTop: 15,
+    textAlign: "center",
+    fontSize: 20,
   },
-  buttonText: { color: "#fff", fontWeight: "700" },
-  loading: { color: "#fff", textAlign: "center", marginTop: 20 },
+  actions: {
+    marginTop: 25,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   modalContainer: {
-    backgroundColor: "#1a1a1a",
+    width: 350,
+    padding: 25,
+    backgroundColor: "#222",
     borderRadius: 12,
-    padding: 20,
-    width: "85%",
-    alignItems: "center",
   },
   modalTitle: {
+    fontSize: 22,
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 15,
+    marginBottom: 20,
   },
   imageGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 10,
+    justifyContent: "space-between",
   },
   optionImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    margin: 5,
-    borderWidth: 2,
-    borderColor: "#ffd700",
+    width: 100,
+    height: 100,
+    marginBottom: 15,
+    borderRadius: 12,
+  },
+  cancelButton: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: "#ff5050",
+    borderRadius: 12,
+  },
+  loading: {
+    color: "#fff",
+    fontSize: 24,
   },
 });

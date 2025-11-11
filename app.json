@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "tekken-tournaments",
+    "name": "TekkenTournaments",
     "slug": "tekken-tournaments",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/LogoTT.png",
     "scheme": "tekkentournaments",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.diobrando1866.tekkentournaments"
     },
     "web": {
       "output": "static",
@@ -43,6 +44,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7b92414c-efa5-43f7-b7b9-dc79b9c1aae3"
+      }
     }
   }
 }

@@ -206,8 +206,9 @@ export default function App() {
   if (screen === "view")
     return <TournamentModule goBack={() => setScreen("hub")} mode="view" />;
 
-  if (screen === "profile")
-    return <ProfileScreen goBack={() => setScreen("hub")} user={user} />;
+  if (screen === "profile") {
+    return <ProfileScreen goBack={() => setScreen("hub")} setScreen={setScreen} user={user} />;
+  }  
   
   if (screen === "details")
     return <TournamentDetailScreen goBack={() => setScreen("view")} tournament={selectedTournament} />;
