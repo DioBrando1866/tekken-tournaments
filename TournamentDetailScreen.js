@@ -73,6 +73,14 @@ export default function TournamentDetailScreen({ tournament, goBack }) {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>🏆 {tournament.name}</Text>
+      <Text style={styles.detailText}>Descripción: {tournament.description || "Sin descripción"}</Text>
+<Text style={styles.detailText}>Tipo: {tournament.tournament_type.replace("_", " ")}</Text>
+<Text style={styles.detailText}>Rondas por enfrentamiento: {tournament.rounds}</Text>
+<Text style={styles.detailText}>Tiempo por partida: {tournament.match_time}s</Text>
+<Text style={styles.detailText}>Privacidad: {tournament.is_public ? "Público" : "Privado"}</Text>
+<Text style={styles.detailText}>Máximo de jugadores: {tournament.max_players}</Text>
+<Text style={[styles.colorBox, { backgroundColor: tournament.color }]}></Text>
+
       <Text style={styles.subtitle}>Jugadores ({players.length})</Text>
 
       {players.map((p) => (
@@ -203,4 +211,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   backText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+  detailText: { color: "#ccc", fontSize: 14, marginBottom: 4 },
+colorBox: { width: 50, height: 20, borderRadius: 4, marginVertical: 6, borderWidth: 1, borderColor: "#fff" },
+
 });

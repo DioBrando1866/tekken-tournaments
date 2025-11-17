@@ -27,6 +27,7 @@ export default function TournamentBracket({ tournament, goBack }) {
     fetchMatches();
   }, []);
 
+  // ⚡ Fetch jugadores
   async function fetchPlayers() {
     const { data, error } = await supabase
       .from("players")
@@ -35,14 +36,16 @@ export default function TournamentBracket({ tournament, goBack }) {
     if (!error && data) setPlayers(data);
   }
 
+  // ⚡ Fetch enfrentamientos
   async function fetchMatches() {
     const { data, error } = await supabase
       .from("matches")
-      .select("*, p1:player1_id(name), p2:player2_id(name)")
+      .select("*, player1:player1_id(name), player2:player2_id(name)")
       .eq("tournament_id", tournament.id);
     if (!error && data) setMatches(data);
   }
 
+  // 🔥 Flash visual al actualizar score
   function triggerFlash(id) {
     setFlashStates(prev => ({ ...prev, [id]: true }));
     setTimeout(() => setFlashStates(prev => ({ ...prev, [id]: false })), 400);
@@ -65,6 +68,7 @@ export default function TournamentBracket({ tournament, goBack }) {
     }
   }, [selectedPlayers]);
 
+  // ✅ Confirmar match
   async function confirmMatch(maxScore) {
     const [p1, p2] = matchPlayers;
     try {
@@ -91,13 +95,13 @@ export default function TournamentBracket({ tournament, goBack }) {
     setSelectedPlayers([]);
   }
 
+  // ⚡ Actualizar score
   async function updateScore(match, playerId) {
-    let playerField = playerId === match.player1_id ? "player1_score" : "player2_score";
+    const playerField = playerId === match.player1_id ? "player1_score" : "player2_score";
     const newScore = (match[playerField] || 0) + 1;
     const updates = { [playerField]: newScore };
     if (newScore >= match.max_score) {
       updates.winner_id = playerId;
-      // Verifica si todos los enfrentamientos de la ronda han terminado
       await createNextRound(match.round);
     }
     const { error } = await supabase.from("matches").update(updates).eq("id", match.id);
@@ -105,31 +109,29 @@ export default function TournamentBracket({ tournament, goBack }) {
     triggerFlash(playerId);
   }
 
+  // 🔄 Crear siguiente ronda
   async function createNextRound(currentRound) {
-    // Verifica si todos los enfrentamientos de la ronda están resueltos
     const incompleteMatches = await supabase
       .from("matches")
       .select("id, winner_id")
       .eq("round", currentRound)
       .is("winner_id", null);
-      
-    if (incompleteMatches.data.length > 0) return; // Si hay enfrentamientos sin resolución, no crear la siguiente ronda
 
-    // Obtén los ganadores de la ronda actual
+    if (incompleteMatches.data.length > 0) return;
+
     const winners = await supabase
       .from("matches")
       .select("winner_id")
       .eq("round", currentRound)
       .not("winner_id", "is", null);
 
-    if (winners.data.length % 2 !== 0) return; // Si no hay suficientes ganadores, no se puede crear la siguiente ronda.
+    if (winners.data.length % 2 !== 0) return;
 
     const pairs = [];
     for (let i = 0; i < winners.data.length; i += 2) {
       pairs.push([winners.data[i].winner_id, winners.data[i + 1].winner_id]);
     }
 
-    // Crear nuevos enfrentamientos para la siguiente ronda
     for (let [player1_id, player2_id] of pairs) {
       await supabase.from("matches").insert([
         {
@@ -138,7 +140,7 @@ export default function TournamentBracket({ tournament, goBack }) {
           player2_id,
           winner_id: null,
           round: currentRound + 1,
-          max_score: 3, // Puedes personalizar el máximo de puntuación por ronda
+          max_score: 3,
           player1_score: 0,
           player2_score: 0,
         },
@@ -167,12 +169,10 @@ export default function TournamentBracket({ tournament, goBack }) {
     }
   }
 
-  // Filtrar jugadores libres (no asignados a ningún match)
   const freePlayers = players.filter(
     p => !matches.some(m => m.player1_id === p.id || m.player2_id === p.id)
   );
 
-  // Organizar matches por ronda
   const organizeByRound = matches => {
     const rounds = {};
     matches.forEach(match => {
@@ -191,7 +191,7 @@ export default function TournamentBracket({ tournament, goBack }) {
         disabled={match.winner_id !== null}
       >
         <Text style={[styles.matchPlayer, match.winner_id === match.player1_id && styles.winnerText]}>
-          {match.p1?.name || "??"} ({match.player1_score})
+          {match.player1?.name || "??"} ({match.player1_score})
         </Text>
       </TouchableOpacity>
 
@@ -202,7 +202,7 @@ export default function TournamentBracket({ tournament, goBack }) {
         disabled={match.winner_id !== null}
       >
         <Text style={[styles.matchPlayer, match.winner_id === match.player2_id && styles.winnerText]}>
-          {match.p2?.name || "??"} ({match.player2_score})
+          {match.player2?.name || "??"} ({match.player2_score})
         </Text>
       </TouchableOpacity>
     </View>
@@ -247,6 +247,17 @@ export default function TournamentBracket({ tournament, goBack }) {
     <SafeAreaView style={styles.container}>
       <AnimatedBackground />
       <Text style={styles.title}>{tournament.name}</Text>
+
+      <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
+        <Text style={styles.detailText}>Descripción: {tournament.description || "Sin descripción"}</Text>
+        <Text style={styles.detailText}>Tipo: {tournament.tournament_type.replace("_", " ")}</Text>
+        <Text style={styles.detailText}>Rondas por enfrentamiento: {tournament.rounds}</Text>
+        <Text style={styles.detailText}>Tiempo por partida: {tournament.match_time}s</Text>
+        <Text style={styles.detailText}>Privacidad: {tournament.is_public ? "Público" : "Privado"}</Text>
+        <Text style={styles.detailText}>Máximo de jugadores: {tournament.max_players}</Text>
+        <View style={[styles.colorBox, { backgroundColor: tournament.color }]} />
+      </View>
+
       <Text style={styles.subtitle}>Añade jugadores y selecciona dos para crear un enfrentamiento</Text>
 
       <View style={styles.addPlayerContainer}>
@@ -262,7 +273,6 @@ export default function TournamentBracket({ tournament, goBack }) {
         </TouchableOpacity>
       </View>
 
-      {/* Jugadores libres */}
       <ScrollView horizontal style={{ marginBottom: 20 }}>
         {freePlayers.map(player => (
           <TouchableOpacity
@@ -285,7 +295,6 @@ export default function TournamentBracket({ tournament, goBack }) {
         <Bracket matches={matches} />
       )}
 
-      {/* Modal de tipo de match */}
       <Modal transparent visible={modalVisible} animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalBackground}>
           <View style={styles.modalContainer}>
@@ -309,10 +318,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0b0b0b" },
   title: { color: "#ff4040", fontSize: 26, fontWeight: "bold", textAlign: "center", marginVertical: 10 },
   subtitle: { color: "#aaa", fontSize: 14, textAlign: "center", marginBottom: 10 },
+  detailText: { color: "#ccc", fontSize: 14, marginBottom: 4 },
+  colorBox: { width: 50, height: 20, borderRadius: 4, marginVertical: 6, borderWidth: 1, borderColor: "#fff" },
   addPlayerContainer: { flexDirection: "row", paddingHorizontal: 10, marginBottom: 12 },
   input: { flex: 1, backgroundColor: "#222", color: "#fff", padding: 8, borderRadius: 8, marginRight: 10 },
   addBtn: { backgroundColor: "#e43b3b", padding: 8, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  playerCard: { backgroundColor: "#222", borderColor: "#e43b3b", borderWidth: 1, borderRadius: 12, padding: 10, marginHorizontal: 6, alignItems: "center", justifyContent: "center" },
   freePlayerCard: { backgroundColor: "#222", borderColor: "#e43b3b", borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, marginHorizontal: 6, alignItems: "center", justifyContent: "center", height: 50, minWidth: 80 },
   playerName: { color: "#fff", fontSize: 14 },
   matchPlayer: { color: "#fff", fontSize: 14, marginVertical: 2, textAlign: "center" },
