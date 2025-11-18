@@ -1,18 +1,17 @@
 import * as Device from "expo-device";
+import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Button,
-  Image,
-  Modal,
-  ScrollView,
+  Image, Platform, ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { supabase } from "./apiSupabase";
 
@@ -32,10 +31,12 @@ export default function ProfileScreen({ goBack, setScreen }) {
   const [bio, setBio] = useState("");
   const [status, setStatus] = useState("");
 
-  // 🔹 Registrar push token
   async function registerPushToken() {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session || !Device.isDevice) return;
+    if (!session) return;
+
+    // Ignorar web
+    if (!Device.isDevice || Platform.OS === "web") return;
 
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== "granted") return;
@@ -66,7 +67,6 @@ export default function ProfileScreen({ goBack, setScreen }) {
         setBio(data.bio || "");
         setStatus(data.status || "");
 
-        // Registrar token push
         await registerPushToken();
       } catch (err) {
         console.error("❌ Error cargando perfil:", err);
@@ -78,7 +78,6 @@ export default function ProfileScreen({ goBack, setScreen }) {
     loadProfile();
   }, []);
 
-  // Guardar cambios
   async function handleSave() {
     try {
       const { data, error } = await supabase.from("users")
@@ -97,6 +96,117 @@ export default function ProfileScreen({ goBack, setScreen }) {
     }
   }
 
+  async function pickAndUploadImage(userId) {
+    try {
+      // Abre el selector de imágenes
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images, // Asegúrate de que sea una imagen
+        quality: 0.7, // Comprime la imagen para mejorar el tiempo de carga
+      });
+  
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        console.log("No se seleccionó ninguna imagen.");
+        return null; // Si el usuario cancela o no selecciona una imagen
+      }
+  
+      const uri = result.assets[0].uri;
+  
+      // Verifica que el URI sea válido
+      if (!uri || typeof uri !== "string") {
+        throw new Error("URI de la imagen no es válida.");
+      }
+  
+      console.log("URI de la imagen:", uri); // Imprime el URI de la imagen
+  
+      // Extrae el blob de la imagen
+      let file;
+      if (Platform.OS === "web") {
+        const response = await fetch(uri);
+        file = await response.blob();
+      } else {
+        file = await fetch(uri).then((r) => r.blob());
+      }
+  
+      // Verifica que el blob se haya extraído correctamente
+      if (!file) {
+        throw new Error("No se pudo obtener el blob de la imagen.");
+      }
+  
+      // Intenta obtener la extensión del tipo MIME
+      const mimeType = file.type; // El tipo MIME del archivo
+      let fileExtension = "";
+  
+      // Comprobar el tipo MIME y asignar una extensión
+      if (mimeType.includes("image/jpeg")) {
+        fileExtension = ".jpg";
+      } else if (mimeType.includes("image/png")) {
+        fileExtension = ".png";
+      } else if (mimeType.includes("image/gif")) {
+        fileExtension = ".gif";
+      } else {
+        throw new Error("Tipo de archivo no soportado.");
+      }
+  
+      // Asegúrate de que userId sea un valor válido
+      let userIdStr = null;
+      if (userId && typeof userId === "object" && userId.id) {
+        userIdStr = `${userId.id}`; // Si userId es un objeto y tiene la propiedad `id`
+      } else if (typeof userId === "string") {
+        userIdStr = userId; // Si userId ya es un string, usémoslo directamente
+      }
+  
+      if (!userIdStr) {
+        throw new Error("userId no es válido.");
+      }
+  
+      // Genera un nombre de archivo basado en el usuario y la fecha
+      const filename = `${userIdStr}-${Date.now()}${fileExtension}`;
+  
+      console.log("Nombre del archivo:", filename); // Imprime el nombre del archivo
+  
+      // Subir la imagen al bucket de Supabase
+      const { data, error: uploadError } = await supabase.storage
+        .from("profile-pictures")
+        .upload(filename, file, { upsert: true });
+  
+      if (uploadError) {
+        throw uploadError;
+      }
+  
+      // Actualizar la base de datos con el nombre del archivo subido
+      const { error: dbError } = await supabase
+        .from("users")
+        .update({ profile_image: filename })
+        .eq("id", userIdStr); // Asegúrate de que el id sea un string válido
+  
+      if (dbError) {
+        throw dbError;
+      }
+  
+      console.log("Imagen subida con éxito:", filename);
+  
+      // Actualizar el estado con el nuevo nombre de archivo
+      setUser({ ...user, profile_image: filename });
+  
+      return filename; // Retorna el nombre de archivo
+    } catch (err) {
+      console.error("❌ Error subiendo imagen:", err);
+      return null;
+    }
+  }
+  
+
+  async function removeProfileImage() {
+    try {
+      await supabase.from("users").update({ profile_image: null }).eq("id", user.id);
+      setUser({ ...user, profile_image: null });
+      Alert.alert("✅ Imagen eliminada", "Se ha restablecido la imagen por defecto.");
+    } catch (err) {
+      console.error("Error eliminando imagen:", err);
+      Alert.alert("Error", "No se pudo eliminar la imagen.");
+    }
+  }
+
   if (loading) return (
     <View style={styles.container}>
       <ActivityIndicator color="#fff" />
@@ -110,6 +220,10 @@ export default function ProfileScreen({ goBack, setScreen }) {
     </View>
   );
 
+  const profileImageSource = user.profile_image
+    ? { uri: supabase.storage.from("profile-pictures").getPublicUrl(user.profile_image).data.publicUrl }
+    : require("./assets/images/profile-pics/random.png");
+
   return (
     <ScrollView style={styles.container}>
       <TouchableOpacity onPress={() => setScreen("hub")}>
@@ -119,39 +233,23 @@ export default function ProfileScreen({ goBack, setScreen }) {
       <Text style={styles.title}>Perfil del Usuario</Text>
 
       <View style={{ alignItems: "center", marginBottom: 30 }}>
-        <Image
-          source={profileImages[user.profile_image] || profileImages["random.png"]}
-          style={styles.profileImage}
-        />
-        <TouchableOpacity
-          style={styles.changeImageButton}
-          onPress={() => setSelectingImage(true)}
-        >
-          <Text style={styles.buttonText}>🖼️ Cambiar imagen</Text>
-        </TouchableOpacity>
-      </View>
+        <Image source={profileImageSource} style={styles.profileImage} />
 
-      <Modal visible={selectingImage} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Elige tu imagen de perfil</Text>
-            <View style={styles.imageGrid}>
-              {Object.keys(profileImages).map((imgName) => (
-                <TouchableOpacity key={imgName} onPress={async () => {
-                  await supabase.from("users").update({ profile_image: imgName }).eq("id", user.id);
-                  setUser({ ...user, profile_image: imgName });
-                  setSelectingImage(false);
-                }}>
-                  <Image source={profileImages[imgName]} style={styles.optionImage} />
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setSelectingImage(false)}>
-              <Text style={styles.buttonText}>❌ Cancelar</Text>
+        <View style={{ flexDirection: "row", marginTop: 10 }}>
+        <TouchableOpacity 
+  style={styles.changeImageButton} 
+  onPress={() => pickAndUploadImage(user.id)} // Pasa el user.id aquí
+>
+  <Text style={styles.buttonText}>🖼️ Cambiar imagen</Text>
+</TouchableOpacity>
+
+          {user.profile_image && (
+            <TouchableOpacity style={[styles.changeImageButton, { marginLeft: 10, backgroundColor: "#555" }]} onPress={removeProfileImage}>
+              <Text style={styles.buttonText}>❌ Eliminar imagen</Text>
             </TouchableOpacity>
-          </View>
+          )}
         </View>
-      </Modal>
+      </View>
 
       <View style={styles.section}>
         <Text style={styles.label}>Nombre de usuario:</Text>
@@ -169,12 +267,7 @@ export default function ProfileScreen({ goBack, setScreen }) {
       <View style={styles.section}>
         <Text style={styles.label}>Biografía:</Text>
         {editing ? (
-          <TextInput
-            style={[styles.input, { height: 80 }]}
-            multiline
-            value={bio}
-            onChangeText={setBio}
-          />
+          <TextInput style={[styles.input, { height: 80 }]} multiline value={bio} onChangeText={setBio} />
         ) : (
           <Text style={styles.value}>{bio || "No has añadido una biografía."}</Text>
         )}
@@ -212,15 +305,9 @@ const styles = StyleSheet.create({
   value: { color: "#fff", fontSize: 20 },
   input: { backgroundColor: "#222", color: "#fff", padding: 15, borderRadius: 12, marginTop: 15, fontSize: 18 },
   profileImage: { width: 120, height: 120, borderRadius: 60 },
-  changeImageButton: { marginTop: 15, padding: 15, backgroundColor: "#ff5050", borderRadius: 12 },
+  changeImageButton: { padding: 15, backgroundColor: "#ff5050", borderRadius: 12 },
   buttonText: { color: "#fff", fontWeight: "700" },
   editButton: { color: "#00bcd4", fontSize: 22, textAlign: "center", marginTop: 20 },
-  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0, 0, 0, 0.7)" },
-  modalContainer: { width: 350, padding: 25, backgroundColor: "#222", borderRadius: 12 },
-  modalTitle: { fontSize: 22, color: "#fff", marginBottom: 20 },
-  imageGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-  optionImage: { width: 100, height: 100, marginBottom: 15, borderRadius: 12 },
-  cancelButton: { marginTop: 15, padding: 15, backgroundColor: "#ff5050", borderRadius: 12 },
   loading: { color: "#fff", fontSize: 24 },
   actions: { marginTop: 25 },
 });

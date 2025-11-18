@@ -41,6 +41,9 @@
         }
       ]
     ],
+    "notification": {
+      "vapidPublicKey": "BB8_KqPHuufmnvTFYB0gwQENLeJD8Zt7upOIfjIQDEzvjn5UF1DcIaFN9H1UVk1vIJN49k1pM5suFNkLpNaNIKo"
+    },
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
