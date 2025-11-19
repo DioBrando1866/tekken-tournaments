@@ -221,19 +221,6 @@ export default function TournamentBracket({ tournament, goBack }) {
               {round.map(match => (
                 <View key={match.id} style={{ position: "relative" }}>
                   <MatchBlock match={match} height={baseHeight * Math.pow(2, i)} />
-                  {i < rounds.length - 1 && match.winner_id && (
-                    <View
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 100,
-                        width: 40,
-                        height: baseHeight * Math.pow(2, i),
-                        borderTopWidth: 2,
-                        borderColor: "#ff4040",
-                      }}
-                    />
-                  )}
                 </View>
               ))}
             </View>
@@ -243,6 +230,11 @@ export default function TournamentBracket({ tournament, goBack }) {
     );
   };
 
+  // ⬇️ FIX IMPORTANTE AQUI PARA EVITAR EL ERROR 'replace of null'
+  const formattedType = tournament.tournament_type
+    ? tournament.tournament_type.replace("_", " ")
+    : "Tipo desconocido";
+
   return (
     <SafeAreaView style={styles.container}>
       <AnimatedBackground />
@@ -250,7 +242,7 @@ export default function TournamentBracket({ tournament, goBack }) {
 
       <View style={{ paddingHorizontal: 16, marginBottom: 10 }}>
         <Text style={styles.detailText}>Descripción: {tournament.description || "Sin descripción"}</Text>
-        <Text style={styles.detailText}>Tipo: {tournament.tournament_type.replace("_", " ")}</Text>
+        <Text style={styles.detailText}>Tipo: {formattedType}</Text>
         <Text style={styles.detailText}>Rondas por enfrentamiento: {tournament.rounds}</Text>
         <Text style={styles.detailText}>Tiempo por partida: {tournament.match_time}s</Text>
         <Text style={styles.detailText}>Privacidad: {tournament.is_public ? "Público" : "Privado"}</Text>

@@ -34,19 +34,65 @@ export default function CreateTournamentScreen({ goBack }) {
   const [loading, setLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(0); // 0-100
+  const [passwordTips, setPasswordTips] = useState([]);
+
   useEffect(() => {
     fetchUser();
   }, []);
 
   async function fetchUser() {
-    const { data, error } = await supabase.auth.getUser();
-    if (!error && data.user) setCurrentUser(data.user);
-    else Alert.alert("Error", "No se pudo obtener el usuario actual.");
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) {
+      Alert.alert("Error", "No se pudo obtener el usuario actual.");
+      return;
+    }
+  
+    const userId = authData.user.id;
+  
+    const { data: userRow, error: userError } = await supabase
+      .from("users")
+      .select("username")
+      .eq("id", userId)
+      .single();
+  
+    if (userError) {
+      console.error(userError);
+      Alert.alert("Error", "No se pudo obtener el username.");
+      return;
+    }
+  
+    setCurrentUser({
+      id: userId,
+      username: userRow.username
+    });
   }
 
   function handleDateChange(event, selectedDate) {
     if (Platform.OS === "android") setShowDatePicker(false);
     if (selectedDate) setDate(selectedDate);
+  }
+
+  function analyzePassword(pw) {
+    let strength = 0;
+    const tips = [];
+
+    if (pw.length >= 8) strength += 25;
+    else tips.push("Añade al menos 8 caracteres");
+
+    if (/[A-Z]/.test(pw)) strength += 25;
+    else tips.push("Incluye mayúsculas");
+
+    if (/[0-9]/.test(pw)) strength += 25;
+    else tips.push("Incluye números");
+
+    if (/[^A-Za-z0-9]/.test(pw)) strength += 25;
+    else tips.push("Incluye símbolos");
+
+    setPasswordStrength(strength);
+    setPasswordTips(tips);
   }
 
   async function createTournament() {
@@ -70,7 +116,8 @@ export default function CreateTournamentScreen({ goBack }) {
         max_players: maxPlayersInt,
         color,
         creator_id: currentUser.id,
-        creator_name: currentUser.user_metadata?.full_name || "Usuario"
+        creator_name: currentUser.username,
+        password: isPublic ? null : password
       }]);
 
       if (error) throw error;
@@ -164,6 +211,51 @@ export default function CreateTournamentScreen({ goBack }) {
             <Text style={styles.optionText}>{isPublic ? "Público" : "Privado"}</Text>
           </TouchableOpacity>
 
+          {!isPublic && (
+            <>
+              <Text style={styles.label}>Contraseña (opcional):</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={[styles.input, { flex: 1, marginVertical: 0 }]}
+                  placeholder="Contraseña del torneo"
+                  placeholderTextColor="#888"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    analyzePassword(text);
+                  }}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <Text style={{ color: "#fff", fontSize: 20 }}>
+                    {showPassword ? "👁️" : "👁️‍🗨️"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.strengthBarBackground}>
+                <View
+                  style={{
+                    height: 6,
+                    backgroundColor: "#ff4040",
+                    width: `${passwordStrength}%`,
+                    borderRadius: 3,
+                  }}
+                />
+              </View>
+
+              {passwordTips.length > 0 && (
+                <View style={{ marginTop: 4 }}>
+                  {passwordTips.map((tip, idx) => (
+                    <Text key={idx} style={{ color: "#ccc", fontSize: 12 }}>
+                      • {tip}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+
           <Text style={styles.label}>Máximo de jugadores:</Text>
           <TextInput
             style={styles.input}
@@ -220,4 +312,12 @@ const styles = StyleSheet.create({
   optionText: { color: "#fff", fontSize: 16, marginVertical: 4 },
   createButton: { backgroundColor: "#ff4040", paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, marginVertical: 20 },
   link: { color: "#ff5050", marginTop: 12, fontSize: 14, textDecorationLine: "underline" },
+  passwordContainer: { flexDirection: "row", alignItems: "center", width: 260 },
+  strengthBarBackground: {
+    height: 6,
+    backgroundColor: "#555",
+    borderRadius: 3,
+    marginTop: 6,
+    width: 260,
+  },
 });

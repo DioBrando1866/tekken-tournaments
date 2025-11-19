@@ -1,11 +1,41 @@
 import React, { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { supabase } from "./apiSupabase";
 
 export default function TournamentDetailScreen({ tournament, goBack }) {
   const [players, setPlayers] = useState([]);
   const [matches, setMatches] = useState([]);
 
+  // 🛡 STATE PARA PROTEGER EL TORNEO
+  const [needsPassword, setNeedsPassword] = useState(!tournament.is_public);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordModalVisible, setPasswordModalVisible] = useState(!tournament.is_public);
+
+  // ================================
+  // 🔐 VALIDAR CONTRASEÑA PRIVADA
+  // ================================
+  function checkPassword() {
+    if (passwordInput === tournament.password) {
+      setNeedsPassword(false);
+      setPasswordModalVisible(false);
+    } else {
+      Alert.alert("Error", "Contraseña incorrecta");
+      setPasswordInput("");
+    }
+  }
+
+  // ================================
+  // 📥 FETCH PLAYERS
+  // ================================
   async function fetchPlayers() {
     const { data, error } = await supabase
       .from("players")
@@ -15,6 +45,7 @@ export default function TournamentDetailScreen({ tournament, goBack }) {
     if (!error) setPlayers(data);
   }
 
+  // 📥 FETCH MATCHES
   async function fetchMatches() {
     const { data, error } = await supabase
       .from("matches")
@@ -25,75 +56,117 @@ export default function TournamentDetailScreen({ tournament, goBack }) {
   }
 
   useEffect(() => {
-    fetchPlayers();
-    fetchMatches();
-  }, []);
+    if (!needsPassword) {
+      fetchPlayers();
+      fetchMatches();
+    }
+  }, [needsPassword]);
 
-  // 🧱 Intentar eliminar jugador
+  // ================================
+  // ❌ ELIMINAR JUGADOR
+  // ================================
   async function deletePlayer(playerId) {
     try {
       const { error } = await supabase.from("players").delete().eq("id", playerId);
       if (error) {
-        // Si es error de clave foránea
         if (error.code === "23503") {
           Alert.alert(
             "No se puede eliminar",
-            "Este jugador está en un enfrentamiento. Elimínalo primero del match antes de borrarlo."
+            "Este jugador está en un enfrentamiento. Elimínalo primero del match."
           );
-        } else {
-          throw error;
-        }
+        } else throw error;
       } else {
-        Alert.alert("Jugador eliminado", "El jugador fue eliminado correctamente.");
+        Alert.alert("Jugador eliminado correctamente.");
         fetchPlayers();
       }
     } catch (err) {
-      console.error("Error eliminando jugador:", err);
+      console.error("Error al eliminar jugador:", err);
     }
   }
 
-  // ⚔️ Eliminar jugador de un enfrentamiento (sin borrarlo del torneo)
+  // ❌ ELIMINAR SOLO DEL MATCH
   async function removePlayerFromMatch(matchId, playerSlot) {
-    const fieldToUpdate = playerSlot === 1 ? "player1_id" : "player2_id";
+    const field = playerSlot === 1 ? "player1_id" : "player2_id";
 
     const { error } = await supabase
       .from("matches")
-      .update({ [fieldToUpdate]: null })
+      .update({ [field]: null })
       .eq("id", matchId);
 
     if (error) {
-      console.error("Error eliminando jugador del match:", error);
-      Alert.alert("Error", "No se pudo eliminar el jugador del enfrentamiento.");
+      Alert.alert("Error", "No se pudo eliminar del enfrentamiento.");
     } else {
-      Alert.alert("Jugador eliminado del enfrentamiento");
       fetchMatches();
     }
   }
 
+  // No mostramos nada hasta que verifique la contraseña
+  if (needsPassword) {
+    return (
+      <Modal animationType="fade" transparent visible={passwordModalVisible}>
+        <View style={styles.modalBackground}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>🔒 Torneo privado</Text>
+            <Text style={styles.modalSubtitle}>Introduce la contraseña para acceder</Text>
+
+            <TextInput
+              secureTextEntry
+              style={styles.modalInput}
+              placeholder="Contraseña..."
+              placeholderTextColor="#888"
+              value={passwordInput}
+              onChangeText={setPasswordInput}
+            />
+
+            <TouchableOpacity style={styles.modalBtn} onPress={checkPassword}>
+              <Text style={styles.modalBtnText}>Entrar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancel}
+              onPress={() => {
+                setPasswordModalVisible(false);
+                goBack();
+              }}
+            >
+              <Text style={{ color: "#aaa" }}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  // ================================
+  // 🎨 CONTENIDO NORMAL UNA VEZ DENTRO
+  // ================================
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>🏆 {tournament.name}</Text>
+
       <Text style={styles.detailText}>
         Descripción: {tournament.description || "Sin descripción"}
       </Text>
       <Text style={styles.detailText}>
-        Tipo: {tournament.tournament_type ? tournament.tournament_type.replace("_", " ") : "Tipo desconocido"}
+        Tipo:{" "}
+        {tournament.tournament_type
+          ? tournament.tournament_type.replace("_", " ")
+          : "Tipo desconocido"}
       </Text>
       <Text style={styles.detailText}>Rondas por enfrentamiento: {tournament.rounds}</Text>
       <Text style={styles.detailText}>Tiempo por partida: {tournament.match_time}s</Text>
-      <Text style={styles.detailText}>Privacidad: {tournament.is_public ? "Público" : "Privado"}</Text>
+      <Text style={styles.detailText}>
+        Privacidad: {tournament.is_public ? "Público" : "Privado"}
+      </Text>
       <Text style={styles.detailText}>Máximo de jugadores: {tournament.max_players}</Text>
-      <Text style={[styles.colorBox, { backgroundColor: tournament.color }]}></Text>
+      <Text style={[styles.colorBox, { backgroundColor: tournament.color }]} />
 
       <Text style={styles.subtitle}>Jugadores ({players.length})</Text>
 
       {players.map((p) => (
         <View key={p.id} style={styles.playerCard}>
           <Text style={{ color: "#fff" }}>{p.name}</Text>
-          <TouchableOpacity
-            style={styles.deleteBtn}
-            onPress={() => deletePlayer(p.id)}
-          >
+          <TouchableOpacity style={styles.deleteBtn} onPress={() => deletePlayer(p.id)}>
             <Text style={{ color: "#fff" }}>🗑</Text>
           </TouchableOpacity>
         </View>
@@ -102,9 +175,7 @@ export default function TournamentDetailScreen({ tournament, goBack }) {
       <Text style={[styles.subtitle, { marginTop: 20 }]}>Enfrentamientos</Text>
 
       {matches.length === 0 ? (
-        <Text style={{ color: "#aaa", textAlign: "center", marginTop: 10 }}>
-          No hay enfrentamientos creados aún.
-        </Text>
+        <Text style={{ color: "#aaa", textAlign: "center" }}>No hay enfrentamientos aún.</Text>
       ) : (
         matches.map((m) => {
           const p1 = players.find((p) => p.id === m.player1_id);
@@ -149,6 +220,9 @@ export default function TournamentDetailScreen({ tournament, goBack }) {
   );
 }
 
+// ============================================================
+// 🎨 ESTILOS (COMPLETOS)
+// ============================================================
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0b0b0b", padding: 16 },
   title: {
@@ -216,5 +290,58 @@ const styles = StyleSheet.create({
   },
   backText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   detailText: { color: "#ccc", fontSize: 14, marginBottom: 4 },
-  colorBox: { width: 50, height: 20, borderRadius: 4, marginVertical: 6, borderWidth: 1, borderColor: "#fff" },
+  colorBox: {
+    width: 50,
+    height: 20,
+    borderRadius: 4,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: "#fff",
+  },
+
+  // ================== MODAL PRIVADO ==================
+  modalBackground: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  modalContainer: {
+    backgroundColor: "#1a1a1a",
+    padding: 20,
+    borderRadius: 12,
+    width: "80%",
+    borderWidth: 1,
+    borderColor: "#ff4040",
+  },
+  modalTitle: {
+    color: "#ff4040",
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    color: "#ccc",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: "#333",
+    color: "#fff",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 14,
+  },
+  modalBtn: {
+    backgroundColor: "#ff4040",
+    padding: 10,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalBtnText: { color: "#fff", fontWeight: "bold" },
+  modalCancel: {
+    marginTop: 10,
+    alignItems: "center",
+  },
 });
